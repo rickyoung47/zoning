@@ -47,21 +47,23 @@
     <section class="results" aria-labelledby="results-title">
       <div class="results-heading">
         <div>
-          <p class="eyebrow">NEARBY SCHOOLS</p>
-          <h2 id="results-title">반경별 학교 수</h2>
+          <p class="eyebrow">NEARBY FACILITIES</p>
+          <h2 id="results-title">반경별 주변 시설 수</h2>
         </div>
         <p id="results-subtitle">산업단지를 선택하면 주변 학교 수를 계산합니다.</p>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th scope="col">학교 종류</th><th scope="col">700m 이내</th><th scope="col">2km 이내</th><th scope="col">5km 이내</th></tr></thead>
+          <thead><tr><th scope="col">시설 종류</th><th scope="col">700m 이내</th><th scope="col">2km 이내</th><th scope="col">5km 이내</th></tr></thead>
           <tbody>
             <tr><th scope="row"><span class="school-chip elementary">초등학교</span></th><td id="elem-700">—</td><td id="elem-2000">—</td><td id="elem-5000">—</td></tr>
             <tr><th scope="row"><span class="school-chip middle">중학교</span></th><td id="middle-700">—</td><td id="middle-2000">—</td><td id="middle-5000">—</td></tr>
+            <tr><th scope="row"><span class="school-chip hospital">병·의원</span></th><td id="hospital-700">—</td><td id="hospital-2000">—</td><td id="hospital-5000">—</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="method-note">각 수치는 선택한 산업단지 중심으로 해당 거리 안에 있는 학교 수입니다. 학교 표시는 5km 이내만 표시합니다.</p>
+      <p class="method-note">학교 수와 병·의원 수는 선택한 산업단지 중심 좌표부터 각 반경 안에 있는 시설의 누적 개수입니다. 지도에는 5km 이내 학교만 표시합니다.</p>
+      <p id="hospital-source" class="method-note">병·의원 위치 자료를 불러오는 중입니다.</p>
     </section>
 
     <section class="rankings" aria-labelledby="rankings-title">
@@ -89,7 +91,7 @@
       <div class="ranking-legend"><span><i class="legend-elementary"></i>초등학교</span><span><i class="legend-middle"></i>중학교</span><span class="ranking-legend-note">막대를 누르면 해당 산업단지를 지도에서 선택합니다.</span></div>
     </section>
 
-    <footer>자료: 국토교통부 산업단지 위치 · 한국교육시설안전원 학교 위치</footer>
+    <footer>자료: 국토교통부 산업단지 위치 · 한국교육시설안전원 학교 위치 · 국립중앙의료원 병·의원 찾기 서비스</footer>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>

@@ -23,7 +23,9 @@
   const gridCellSize = 0.05;
   let industries = [];
   let schools = [];
+  let hospitals = [];
   let schoolGrid = new Map();
+  let hospitalGrid = new Map();
 
   const esc = (text) => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const haversine = (aLat, aLon, bLat, bLon) => {
@@ -46,6 +48,31 @@
       if (!schoolGrid.has(key)) schoolGrid.set(key, []);
       schoolGrid.get(key).push(school);
     }
+  }
+
+  function buildHospitalGrid() {
+    hospitalGrid = new Map();
+    for (const hospital of hospitals) {
+      const key = `${Math.floor(hospital.lat / gridCellSize)}:${Math.floor(hospital.lon / gridCellSize)}`;
+      if (!hospitalGrid.has(key)) hospitalGrid.set(key, []);
+      hospitalGrid.get(key).push(hospital);
+    }
+  }
+
+  function nearbyHospitalCounts(site) {
+    const latCell = Math.floor(site.lat / gridCellSize);
+    const lonCell = Math.floor(site.lon / gridCellSize);
+    const counts = [0, 0, 0];
+    for (let latOffset = -2; latOffset <= 2; latOffset++) {
+      for (let lonOffset = -2; lonOffset <= 2; lonOffset++) {
+        const cell = hospitalGrid.get(`${latCell + latOffset}:${lonCell + lonOffset}`) || [];
+        for (const hospital of cell) {
+          const distance = haversine(site.lat, site.lon, hospital.lat, hospital.lon);
+          for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[i]++;
+        }
+      }
+    }
+    return counts;
   }
 
   function nearbySchools(site) {
@@ -153,11 +180,15 @@
 
   Promise.all([
     fetch('data.json').then(r => { if (!r.ok) throw new Error('data.json 로드 실패'); return r.json(); }),
-    fetch('provinces.geojson').then(r => { if (!r.ok) throw new Error('경계 파일 로드 실패'); return r.json(); })
-  ]).then(([data, boundaries]) => {
+    fetch('provinces.geojson').then(r => { if (!r.ok) throw new Error('경계 파일 로드 실패'); return r.json(); }),
+    fetch('hospitals.json').then(r => { if (!r.ok) throw new Error('병·의원 자료 로드 실패'); return r.json(); })
+  ]).then(([data, boundaries, hospitalData]) => {
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     schools = data.schools.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+    hospitals = hospitalData.facilities.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     buildSchoolGrid();
+    buildHospitalGrid();
+    document.getElementById('hospital-source').textContent = `병·의원 자료: 국립중앙의료원 병·의원 찾기 서비스 · 자료 내려받기 ${hospitalData.retrieved} · 좌표가 확인된 ${hospitals.length.toLocaleString()}개소`;
     for (const item of industries) {
       const option = document.createElement('option');
       option.value = item.name;
@@ -221,6 +252,7 @@
     selection.clearLayers();
     const nearby = [];
     const counts = { '초등학교': [0, 0, 0], '중학교': [0, 0, 0] };
+    const hospitalCounts = nearbyHospitalCounts(site);
     for (const { school, distance } of nearbySchools(site)) {
       nearby.push({ school, distance });
       for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[school.level][i]++;
@@ -256,8 +288,11 @@
         document.getElementById(`${prefix}-${radius}`).textContent = counts[level][i].toLocaleString();
       });
     }
+    rings.forEach((radius, i) => {
+      document.getElementById(`hospital-${radius}`).textContent = hospitalCounts[i].toLocaleString();
+    });
     title.textContent = site.name;
-    resultsSubtitle.textContent = `${site.name} 기준 · 누적 거리별 학교 수`;
+    resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;
     setStatus(`선택한 산업단지에서 5km 이내 학교 ${nearby.length.toLocaleString()}곳을 표시했습니다.`);
     input.value = site.name;
     map.fitBounds(L.latLngBounds([site.lat, site.lon], [site.lat, site.lon]).pad(0.085), { maxZoom: 13, animate: true });
