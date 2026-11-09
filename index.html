@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>산업단지 주변 학교 찾기</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">⌖</div>
+      <div>
+        <p class="eyebrow">INDUSTRY · SCHOOL MAP</p>
+        <h1>산업단지 주변 학교 찾기</h1>
+      </div>
+    </header>
+
+    <section class="search-panel" aria-label="산업단지 검색">
+      <label for="industry-search">산업단지 이름</label>
+      <div class="search-row">
+        <input id="industry-search" type="search" list="industry-list" placeholder="예: 서울디지털산업단지" autocomplete="off">
+        <datalist id="industry-list"></datalist>
+        <button id="search-button" type="button">위치 찾기</button>
+      </div>
+      <p id="search-status" class="status" aria-live="polite">산업단지 이름을 입력해 위치를 찾아보세요.</p>
+      <div id="candidate-list" class="candidate-list" role="group" aria-label="산업단지 후보" hidden></div>
+    </section>
+
+    <section class="map-card" aria-label="산업단지와 주변 학교 지도">
+      <div class="map-heading">
+        <div><span class="live-dot"></span><span id="map-title">대한민국 시·도 경계</span></div>
+        <span class="map-hint">지도를 확대해 학교 위치를 확인할 수 있어요</span>
+      </div>
+      <div id="map" role="application" aria-label="산업단지 주변 학교 지도"></div>
+      <div class="legend">
+        <span><i class="legend-site"></i>선택한 산업단지</span>
+        <span><i class="legend-elementary"></i>초등학교</span>
+        <span><i class="legend-middle"></i>중학교</span>
+        <span><i class="legend-ring"></i>반경 700m · 2km · 5km</span>
+      </div>
+    </section>
+
+    <section class="results" aria-labelledby="results-title">
+      <div class="results-heading">
+        <div>
+          <p class="eyebrow">NEARBY SCHOOLS</p>
+          <h2 id="results-title">반경별 학교 수</h2>
+        </div>
+        <p id="results-subtitle">산업단지를 선택하면 주변 학교 수를 계산합니다.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">학교 종류</th><th scope="col">700m 이내</th><th scope="col">2km 이내</th><th scope="col">5km 이내</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><span class="school-chip elementary">초등학교</span></th><td id="elem-700">—</td><td id="elem-2000">—</td><td id="elem-5000">—</td></tr>
+            <tr><th scope="row"><span class="school-chip middle">중학교</span></th><td id="middle-700">—</td><td id="middle-2000">—</td><td id="middle-5000">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="method-note">각 수치는 선택한 산업단지 중심으로 해당 거리 안에 있는 학교 수입니다. 학교 표시는 5km 이내만 표시합니다.</p>
+    </section>
+
+    <footer>자료: 국토교통부 산업단지 위치 · 한국교육시설안전원 학교 위치</footer>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
