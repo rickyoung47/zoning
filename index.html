@@ -64,6 +64,31 @@
       <p class="method-note">각 수치는 선택한 산업단지 중심으로 해당 거리 안에 있는 학교 수입니다. 학교 표시는 5km 이내만 표시합니다.</p>
     </section>
 
+    <section class="rankings" aria-labelledby="rankings-title">
+      <div class="rankings-heading">
+        <div>
+          <p class="eyebrow">SCHOOL ACCESS RANKING</p>
+          <h2 id="rankings-title">반경별 학교 수가 많은 산업단지 TOP 10</h2>
+        </div>
+        <p>초등학교와 중학교 수의 합계 기준</p>
+      </div>
+      <div class="ranking-grid">
+        <article class="ranking-card" aria-labelledby="rank-700-title">
+          <div class="ranking-card-heading"><h3 id="rank-700-title">700m 이내</h3><span>TOP 10</span></div>
+          <div id="rank-700" class="ranking-list" aria-live="polite"><p class="ranking-loading">집계 중…</p></div>
+        </article>
+        <article class="ranking-card" aria-labelledby="rank-2000-title">
+          <div class="ranking-card-heading"><h3 id="rank-2000-title">2km 이내</h3><span>TOP 10</span></div>
+          <div id="rank-2000" class="ranking-list" aria-live="polite"><p class="ranking-loading">집계 중…</p></div>
+        </article>
+        <article class="ranking-card" aria-labelledby="rank-5000-title">
+          <div class="ranking-card-heading"><h3 id="rank-5000-title">5km 이내</h3><span>TOP 10</span></div>
+          <div id="rank-5000" class="ranking-list" aria-live="polite"><p class="ranking-loading">집계 중…</p></div>
+        </article>
+      </div>
+      <div class="ranking-legend"><span><i class="legend-elementary"></i>초등학교</span><span><i class="legend-middle"></i>중학교</span><span class="ranking-legend-note">막대를 누르면 해당 산업단지를 지도에서 선택합니다.</span></div>
+    </section>
+
     <footer>자료: 국토교통부 산업단지 위치 · 한국교육시설안전원 학교 위치</footer>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

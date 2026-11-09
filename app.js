@@ -20,8 +20,10 @@
   const canvas = L.canvas({ padding: 0.35, pane: 'schools' });
   const industryCanvas = L.canvas({ padding: 0.35, pane: 'industrial-sites' });
   const selection = L.layerGroup().addTo(map);
+  const gridCellSize = 0.05;
   let industries = [];
   let schools = [];
+  let schoolGrid = new Map();
 
   const esc = (text) => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const haversine = (aLat, aLon, bLat, bLon) => {
@@ -36,6 +38,97 @@
     status.classList.toggle('error', error);
   };
   const normalizeName = text => text.replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
+
+  function buildSchoolGrid() {
+    schoolGrid = new Map();
+    for (const school of schools) {
+      const key = `${Math.floor(school.lat / gridCellSize)}:${Math.floor(school.lon / gridCellSize)}`;
+      if (!schoolGrid.has(key)) schoolGrid.set(key, []);
+      schoolGrid.get(key).push(school);
+    }
+  }
+
+  function nearbySchools(site) {
+    const latCell = Math.floor(site.lat / gridCellSize);
+    const lonCell = Math.floor(site.lon / gridCellSize);
+    const nearby = [];
+    for (let latOffset = -1; latOffset <= 1; latOffset++) {
+      for (let lonOffset = -2; lonOffset <= 2; lonOffset++) {
+        const cell = schoolGrid.get(`${latCell + latOffset}:${lonCell + lonOffset}`) || [];
+        for (const school of cell) {
+          const distance = haversine(site.lat, site.lon, school.lat, school.lon);
+          if (distance <= 5000) nearby.push({ school, distance });
+        }
+      }
+    }
+    return nearby;
+  }
+
+  function renderRankings() {
+    const scores = industries.map(site => {
+      const counts = { '초등학교': [0, 0, 0], '중학교': [0, 0, 0] };
+      for (const { school, distance } of nearbySchools(site)) {
+        for (let i = 0; i < rings.length; i++) {
+          if (distance <= rings[i]) counts[school.level][i]++;
+        }
+      }
+      return { ...site, counts };
+    });
+
+    rings.forEach((radius, index) => {
+      const topTen = [...scores]
+        .sort((a, b) => {
+          const totalA = a.counts['초등학교'][index] + a.counts['중학교'][index];
+          const totalB = b.counts['초등학교'][index] + b.counts['중학교'][index];
+          return totalB - totalA || b.counts['초등학교'][index] - a.counts['초등학교'][index] || a.name.localeCompare(b.name, 'ko');
+        })
+        .slice(0, 10);
+      const maxTotal = Math.max(1, ...topTen.map(site => site.counts['초등학교'][index] + site.counts['중학교'][index]));
+      const container = document.getElementById(`rank-${radius}`);
+      container.replaceChildren();
+
+      for (const [rank, site] of topTen.entries()) {
+        const elementary = site.counts['초등학교'][index];
+        const middle = site.counts['중학교'][index];
+        const total = elementary + middle;
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'rank-row';
+        row.setAttribute('aria-label', `${rank + 1}위 ${site.name}, 초등학교 ${elementary}곳, 중학교 ${middle}곳. 눌러 지도에서 선택`);
+        row.title = `${site.name} · ${site.id} · 초등학교 ${elementary}곳, 중학교 ${middle}곳`;
+
+        const number = document.createElement('span');
+        number.className = 'rank-number';
+        number.textContent = String(rank + 1).padStart(2, '0');
+        const main = document.createElement('span');
+        main.className = 'rank-main';
+        const name = document.createElement('span');
+        name.className = 'rank-name';
+        name.textContent = site.name;
+        const track = document.createElement('span');
+        track.className = 'rank-track';
+        const elementaryBar = document.createElement('span');
+        elementaryBar.className = 'rank-segment elementary';
+        elementaryBar.style.width = `${elementary / maxTotal * 100}%`;
+        const middleBar = document.createElement('span');
+        middleBar.className = 'rank-segment middle';
+        middleBar.style.width = `${middle / maxTotal * 100}%`;
+        track.append(elementaryBar, middleBar);
+        main.append(name, track);
+        const totalLabel = document.createElement('span');
+        totalLabel.className = 'rank-total';
+        totalLabel.textContent = total.toLocaleString();
+        row.append(number, main, totalLabel);
+        row.addEventListener('click', () => {
+          candidateList.hidden = true;
+          input.value = site.name;
+          selectIndustry(site);
+          document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        container.append(row);
+      }
+    });
+  }
 
   function askToChoose(candidates) {
     candidateList.replaceChildren();
@@ -64,6 +157,7 @@
   ]).then(([data, boundaries]) => {
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     schools = data.schools.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+    buildSchoolGrid();
     for (const item of industries) {
       const option = document.createElement('option');
       option.value = item.name;
@@ -94,6 +188,7 @@
         })
         .addTo(industryMarkers);
     }
+    renderRankings();
     map.fitBounds(regionLayer.getBounds(), { padding: [18, 18] });
     setStatus(`산업단지 ${industries.length.toLocaleString()}곳이 지도에 표시돼 있습니다. 점을 클릭하거나 이름을 검색하세요.`);
   }).catch(error => setStatus(`지도 자료를 불러오지 못했습니다. ${error.message}`, true));
@@ -126,9 +221,7 @@
     selection.clearLayers();
     const nearby = [];
     const counts = { '초등학교': [0, 0, 0], '중학교': [0, 0, 0] };
-    for (const school of schools) {
-      const distance = haversine(site.lat, site.lon, school.lat, school.lon);
-      if (distance > 5000) continue;
+    for (const { school, distance } of nearbySchools(site)) {
       nearby.push({ school, distance });
       for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[school.level][i]++;
     }
