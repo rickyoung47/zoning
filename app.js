@@ -11,11 +11,14 @@
   boundaryPane.style.zIndex = 350;
   const circlePane = map.createPane('circles');
   circlePane.style.zIndex = 410;
+  const industryPane = map.createPane('industrial-sites');
+  industryPane.style.zIndex = 540;
   const schoolPane = map.createPane('schools');
   schoolPane.style.zIndex = 620;
   const sitePane = map.createPane('site');
   sitePane.style.zIndex = 650;
   const canvas = L.canvas({ padding: 0.35, pane: 'schools' });
+  const industryCanvas = L.canvas({ padding: 0.35, pane: 'industrial-sites' });
   const selection = L.layerGroup().addTo(map);
   let industries = [];
   let schools = [];
@@ -71,8 +74,28 @@
       style: { color: '#8291a7', weight: 1.15, opacity: 0.88, fillColor: '#e7edf5', fillOpacity: 0.52, lineJoin: 'round' },
       onEachFeature: (feature, layer) => layer.bindTooltip(feature.properties.name || '', { sticky: true, direction: 'top' })
     }).addTo(map);
+    const industryMarkers = L.layerGroup().addTo(map);
+    for (const site of industries) {
+      L.circleMarker([site.lat, site.lon], {
+        pane: 'industrial-sites',
+        renderer: industryCanvas,
+        radius: 5,
+        color: '#ffffff',
+        weight: 1.2,
+        fillColor: '#d99b26',
+        fillOpacity: 0.96,
+        bubblingMouseEvents: false
+      })
+        .bindTooltip(`${site.name} · 지도에서 선택`, { direction: 'top', sticky: true })
+        .on('click', () => {
+          candidateList.hidden = true;
+          input.value = site.name;
+          selectIndustry(site);
+        })
+        .addTo(industryMarkers);
+    }
     map.fitBounds(regionLayer.getBounds(), { padding: [18, 18] });
-    setStatus(`산업단지 ${industries.length.toLocaleString()}곳 중 이름으로 검색할 수 있습니다.`);
+    setStatus(`산업단지 ${industries.length.toLocaleString()}곳이 지도에 표시돼 있습니다. 점을 클릭하거나 이름을 검색하세요.`);
   }).catch(error => setStatus(`지도 자료를 불러오지 못했습니다. ${error.message}`, true));
 
   function chooseIndustry() {
