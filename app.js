@@ -23,9 +23,11 @@
   const gridCellSize = 0.05;
   let industries = [];
   let schools = [];
+  let highSchools = [];
   let hospitals = [];
   let emergencyFacilities = [];
   let schoolGrid = new Map();
+  let highSchoolGrid = new Map();
   let hospitalGrid = new Map();
   let emergencyGrid = new Map();
 
@@ -49,6 +51,15 @@
       const key = `${Math.floor(school.lat / gridCellSize)}:${Math.floor(school.lon / gridCellSize)}`;
       if (!schoolGrid.has(key)) schoolGrid.set(key, []);
       schoolGrid.get(key).push(school);
+    }
+  }
+
+  function buildHighSchoolGrid() {
+    highSchoolGrid = new Map();
+    for (const school of highSchools) {
+      const key = `${Math.floor(school.lat / gridCellSize)}:${Math.floor(school.lon / gridCellSize)}`;
+      if (!highSchoolGrid.has(key)) highSchoolGrid.set(key, []);
+      highSchoolGrid.get(key).push(school);
     }
   }
 
@@ -95,6 +106,22 @@
         const cell = emergencyGrid.get(`${latCell + latOffset}:${lonCell + lonOffset}`) || [];
         for (const facility of cell) {
           const distance = haversine(site.lat, site.lon, facility.lat, facility.lon);
+          for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[i]++;
+        }
+      }
+    }
+    return counts;
+  }
+
+  function nearbyHighSchoolCounts(site) {
+    const latCell = Math.floor(site.lat / gridCellSize);
+    const lonCell = Math.floor(site.lon / gridCellSize);
+    const counts = [0, 0, 0];
+    for (let latOffset = -2; latOffset <= 2; latOffset++) {
+      for (let lonOffset = -2; lonOffset <= 2; lonOffset++) {
+        const cell = highSchoolGrid.get(`${latCell + latOffset}:${lonCell + lonOffset}`) || [];
+        for (const school of cell) {
+          const distance = haversine(site.lat, site.lon, school.lat, school.lon);
           for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[i]++;
         }
       }
@@ -213,13 +240,16 @@
   ]).then(([data, boundaries, hospitalData, emergencyData]) => {
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     schools = data.schools.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+    highSchools = (data.highSchools || []).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     hospitals = hospitalData.facilities.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     emergencyFacilities = emergencyData.facilities.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     buildSchoolGrid();
+    buildHighSchoolGrid();
     buildHospitalGrid();
     buildEmergencyGrid();
     document.getElementById('hospital-source').textContent = `병·의원 자료: 국립중앙의료원 병·의원 찾기 서비스 · 자료 내려받기 ${hospitalData.retrieved} · 좌표가 확인된 ${hospitals.length.toLocaleString()}개소`;
     document.getElementById('emergency-source').textContent = `응급의료기관 자료: 국립중앙의료원 응급의료정보조회 서비스 · 자료 내려받기 ${emergencyData.retrieved} · 좌표가 확인된 ${emergencyFacilities.length.toLocaleString()}개소`;
+    document.getElementById('highschool-source').textContent = `고등학교 위치 자료: 한국교육시설안전원 전국초중등학교위치표준데이터 · 기준일 ${data.schoolReferenceDate || '미제공'} · 좌표 확인 ${highSchools.length.toLocaleString()}개교`;
     for (const item of industries) {
       const option = document.createElement('option');
       option.value = item.name;
@@ -285,6 +315,7 @@
     const counts = { '초등학교': [0, 0, 0], '중학교': [0, 0, 0] };
     const hospitalCounts = nearbyHospitalCounts(site);
     const emergencyCounts = nearbyEmergencyCounts(site);
+    const highSchoolCounts = nearbyHighSchoolCounts(site);
     for (const { school, distance } of nearbySchools(site)) {
       nearby.push({ school, distance });
       for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[school.level][i]++;
@@ -323,6 +354,7 @@
     rings.forEach((radius, i) => {
       document.getElementById(`hospital-${radius}`).textContent = hospitalCounts[i].toLocaleString();
       document.getElementById(`emergency-${radius}`).textContent = emergencyCounts[i].toLocaleString();
+      document.getElementById(`highschool-${radius}`).textContent = highSchoolCounts[i].toLocaleString();
     });
     title.textContent = site.name;
     resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;

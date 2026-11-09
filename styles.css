@@ -9,3 +9,4 @@
 @media(max-width:640px){.page{width:calc(100% - 22px);padding-top:20px}.topbar{margin-bottom:17px}.search-panel{padding:16px 14px 13px}.search-row{gap:7px}.search-row button{padding:0 13px;font-size:12px}.search-row input{font-size:12px;padding:0 10px}.map-heading{padding:0 13px}.map-hint{display:none}#map{height:420px}.legend{gap:11px;padding:12px 13px;font-size:10px}.results{padding:18px 13px 14px}.results-heading{display:block}.results-heading>p{margin-top:6px}th,td{padding:11px 8px;font-size:11px}tbody td{font-size:13px}.school-chip{font-size:11px}}
 .school-chip.hospital:before{background:#2ca58d}
 .school-chip.emergency:before{background:#ed5b4b}
+.school-chip.highschool:before{background:#b57437}
