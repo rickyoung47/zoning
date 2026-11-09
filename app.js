@@ -24,8 +24,10 @@
   let industries = [];
   let schools = [];
   let hospitals = [];
+  let emergencyFacilities = [];
   let schoolGrid = new Map();
   let hospitalGrid = new Map();
+  let emergencyGrid = new Map();
 
   const esc = (text) => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const haversine = (aLat, aLon, bLat, bLon) => {
@@ -59,6 +61,15 @@
     }
   }
 
+  function buildEmergencyGrid() {
+    emergencyGrid = new Map();
+    for (const facility of emergencyFacilities) {
+      const key = `${Math.floor(facility.lat / gridCellSize)}:${Math.floor(facility.lon / gridCellSize)}`;
+      if (!emergencyGrid.has(key)) emergencyGrid.set(key, []);
+      emergencyGrid.get(key).push(facility);
+    }
+  }
+
   function nearbyHospitalCounts(site) {
     const latCell = Math.floor(site.lat / gridCellSize);
     const lonCell = Math.floor(site.lon / gridCellSize);
@@ -68,6 +79,22 @@
         const cell = hospitalGrid.get(`${latCell + latOffset}:${lonCell + lonOffset}`) || [];
         for (const hospital of cell) {
           const distance = haversine(site.lat, site.lon, hospital.lat, hospital.lon);
+          for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[i]++;
+        }
+      }
+    }
+    return counts;
+  }
+
+  function nearbyEmergencyCounts(site) {
+    const latCell = Math.floor(site.lat / gridCellSize);
+    const lonCell = Math.floor(site.lon / gridCellSize);
+    const counts = [0, 0, 0];
+    for (let latOffset = -2; latOffset <= 2; latOffset++) {
+      for (let lonOffset = -2; lonOffset <= 2; lonOffset++) {
+        const cell = emergencyGrid.get(`${latCell + latOffset}:${lonCell + lonOffset}`) || [];
+        for (const facility of cell) {
+          const distance = haversine(site.lat, site.lon, facility.lat, facility.lon);
           for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[i]++;
         }
       }
@@ -181,14 +208,18 @@
   Promise.all([
     fetch('data.json').then(r => { if (!r.ok) throw new Error('data.json 로드 실패'); return r.json(); }),
     fetch('provinces.geojson').then(r => { if (!r.ok) throw new Error('경계 파일 로드 실패'); return r.json(); }),
-    fetch('hospitals.json').then(r => { if (!r.ok) throw new Error('병·의원 자료 로드 실패'); return r.json(); })
-  ]).then(([data, boundaries, hospitalData]) => {
+    fetch('hospitals.json').then(r => { if (!r.ok) throw new Error('병·의원 자료 로드 실패'); return r.json(); }),
+    fetch('emergency_facilities.json').then(r => { if (!r.ok) throw new Error('응급의료기관 자료 로드 실패'); return r.json(); })
+  ]).then(([data, boundaries, hospitalData, emergencyData]) => {
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     schools = data.schools.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     hospitals = hospitalData.facilities.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+    emergencyFacilities = emergencyData.facilities.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     buildSchoolGrid();
     buildHospitalGrid();
+    buildEmergencyGrid();
     document.getElementById('hospital-source').textContent = `병·의원 자료: 국립중앙의료원 병·의원 찾기 서비스 · 자료 내려받기 ${hospitalData.retrieved} · 좌표가 확인된 ${hospitals.length.toLocaleString()}개소`;
+    document.getElementById('emergency-source').textContent = `응급의료기관 자료: 국립중앙의료원 응급의료정보조회 서비스 · 자료 내려받기 ${emergencyData.retrieved} · 좌표가 확인된 ${emergencyFacilities.length.toLocaleString()}개소`;
     for (const item of industries) {
       const option = document.createElement('option');
       option.value = item.name;
@@ -253,6 +284,7 @@
     const nearby = [];
     const counts = { '초등학교': [0, 0, 0], '중학교': [0, 0, 0] };
     const hospitalCounts = nearbyHospitalCounts(site);
+    const emergencyCounts = nearbyEmergencyCounts(site);
     for (const { school, distance } of nearbySchools(site)) {
       nearby.push({ school, distance });
       for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[school.level][i]++;
@@ -290,6 +322,7 @@
     }
     rings.forEach((radius, i) => {
       document.getElementById(`hospital-${radius}`).textContent = hospitalCounts[i].toLocaleString();
+      document.getElementById(`emergency-${radius}`).textContent = emergencyCounts[i].toLocaleString();
     });
     title.textContent = site.name;
     resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;

@@ -59,11 +59,13 @@
             <tr><th scope="row"><span class="school-chip elementary">초등학교</span></th><td id="elem-700">—</td><td id="elem-2000">—</td><td id="elem-5000">—</td></tr>
             <tr><th scope="row"><span class="school-chip middle">중학교</span></th><td id="middle-700">—</td><td id="middle-2000">—</td><td id="middle-5000">—</td></tr>
             <tr><th scope="row"><span class="school-chip hospital">병·의원</span></th><td id="hospital-700">—</td><td id="hospital-2000">—</td><td id="hospital-5000">—</td></tr>
+            <tr><th scope="row"><span class="school-chip emergency">응급의료기관</span></th><td id="emergency-700">—</td><td id="emergency-2000">—</td><td id="emergency-5000">—</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="method-note">학교 수와 병·의원 수는 선택한 산업단지 중심 좌표부터 각 반경 안에 있는 시설의 누적 개수입니다. 지도에는 5km 이내 학교만 표시합니다.</p>
+      <p class="method-note">각 수치는 선택한 산업단지 중심 좌표부터 700m·2km·5km 안에 있는 누적 시설 개수입니다. 지도에는 5km 이내 학교만 표시합니다.</p>
       <p id="hospital-source" class="method-note">병·의원 위치 자료를 불러오는 중입니다.</p>
+      <p id="emergency-source" class="method-note">응급의료기관 위치 자료를 불러오는 중입니다.</p>
     </section>
 
     <section class="rankings" aria-labelledby="rankings-title">
@@ -91,7 +93,7 @@
       <div class="ranking-legend"><span><i class="legend-elementary"></i>초등학교</span><span><i class="legend-middle"></i>중학교</span><span class="ranking-legend-note">막대를 누르면 해당 산업단지를 지도에서 선택합니다.</span></div>
     </section>
 
-    <footer>자료: 국토교통부 산업단지 위치 · 한국교육시설안전원 학교 위치 · 국립중앙의료원 병·의원 찾기 서비스</footer>
+    <footer>자료: 국토교통부 산업단지 위치 · 한국교육시설안전원 학교 위치 · 국립중앙의료원 병·의원 찾기 서비스 · 국립중앙의료원 응급의료정보조회 서비스</footer>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
