@@ -38,6 +38,7 @@
       <div class="legend">
         <span><i class="legend-site"></i>선택한 산업단지</span>
         <span><i class="legend-industrial"></i>산업단지 위치 · 클릭해 선택</span>
+        <span><i class="legend-boundary"></i>산업단지 경계</span>
         <span><i class="legend-elementary"></i>초등학교</span>
         <span><i class="legend-middle"></i>중학교</span>
         <span><i class="legend-ring"></i>반경 700m · 2km · 5km</span>
@@ -68,6 +69,16 @@
       <p id="hospital-source" class="method-note">병·의원 위치 자료를 불러오는 중입니다.</p>
       <p id="emergency-source" class="method-note">응급의료기관 위치 자료를 불러오는 중입니다.</p>
       <p id="highschool-source" class="method-note">고등학교 위치 자료를 불러오는 중입니다.</p>
+      <section id="hub-results" class="hub-results" hidden aria-labelledby="hub-results-title">
+        <div class="hub-heading"><h3 id="hub-results-title">경상북도 국가거점 시설</h3><span>선택 산업단지 중심 반경별 개수</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">시설 분류</th><th scope="col">700m 이내</th><th scope="col">2km 이내</th><th scope="col">5km 이내</th></tr></thead>
+            <tbody id="hub-count-rows"></tbody>
+          </table>
+        </div>
+        <p id="hub-source" class="method-note"></p>
+      </section>
     </section>
 
     <section class="rankings" aria-labelledby="rankings-title">

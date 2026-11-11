@@ -9,6 +9,8 @@
   const map = L.map('map', { zoomControl: true, scrollWheelZoom: true, preferCanvas: true, zoomSnap: 0.25 }).setView([36.3, 127.8], 7);
   const boundaryPane = map.createPane('boundaries');
   boundaryPane.style.zIndex = 350;
+  const industrialBoundaryPane = map.createPane('industrial-boundaries');
+  industrialBoundaryPane.style.zIndex = 370;
   const circlePane = map.createPane('circles');
   circlePane.style.zIndex = 410;
   const industryPane = map.createPane('industrial-sites');
@@ -19,6 +21,7 @@
   sitePane.style.zIndex = 650;
   const canvas = L.canvas({ padding: 0.35, pane: 'schools' });
   const industryCanvas = L.canvas({ padding: 0.35, pane: 'industrial-sites' });
+  const industrialBoundaryCanvas = L.canvas({ padding: 0.35, pane: 'industrial-boundaries' });
   const selection = L.layerGroup().addTo(map);
   const gridCellSize = 0.05;
   let industries = [];
@@ -26,6 +29,8 @@
   let highSchools = [];
   let hospitals = [];
   let emergencyFacilities = [];
+  let hubCategories = [];
+  let hubPoiCount = 0;
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
   let hospitalGrid = new Map();
@@ -235,10 +240,13 @@
   Promise.all([
     fetch('data.json').then(r => { if (!r.ok) throw new Error('data.json 로드 실패'); return r.json(); }),
     fetch('provinces.geojson').then(r => { if (!r.ok) throw new Error('경계 파일 로드 실패'); return r.json(); }),
+    fetch('industrial_boundaries.geojson').then(r => { if (!r.ok) throw new Error('산업단지 경계 데이터 로드 실패'); return r.json(); }),
     fetch('hospitals.json').then(r => { if (!r.ok) throw new Error('병·의원 자료 로드 실패'); return r.json(); }),
     fetch('emergency_facilities.json').then(r => { if (!r.ok) throw new Error('응급의료기관 자료 로드 실패'); return r.json(); })
-  ]).then(([data, boundaries, hospitalData, emergencyData]) => {
+  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData]) => {
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+    hubCategories = data.hubCategories || [];
+    hubPoiCount = data.hubPoiCount || 0;
     schools = data.schools.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     highSchools = (data.highSchools || []).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     hospitals = hospitalData.facilities.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
@@ -260,6 +268,13 @@
       style: { color: '#8291a7', weight: 1.15, opacity: 0.88, fillColor: '#e7edf5', fillOpacity: 0.52, lineJoin: 'round' },
       onEachFeature: (feature, layer) => layer.bindTooltip(feature.properties.name || '', { sticky: true, direction: 'top' })
     }).addTo(map);
+    L.geoJSON(industrialBoundaries, {
+      pane: 'industrial-boundaries',
+      renderer: industrialBoundaryCanvas,
+      interactive: false,
+      style: { color: '#b54e32', weight: 1, opacity: 0.9, fillColor: '#db8567', fillOpacity: 0.06, lineJoin: 'round' }
+    }).addTo(map);
+    map.attributionControl.addAttribution('산업단지 경계: 국토교통부 DAM_DAN');
     const industryMarkers = L.layerGroup().addTo(map);
     for (const site of industries) {
       L.circleMarker([site.lat, site.lon], {
@@ -356,6 +371,27 @@
       document.getElementById(`emergency-${radius}`).textContent = emergencyCounts[i].toLocaleString();
       document.getElementById(`highschool-${radius}`).textContent = highSchoolCounts[i].toLocaleString();
     });
+    const hubPanel = document.getElementById('hub-results');
+    const hubRows = document.getElementById('hub-count-rows');
+    const showHubCounts = site.province === '경상북도';
+    hubPanel.hidden = !showHubCounts;
+    if (showHubCounts) {
+      hubRows.replaceChildren();
+      for (const category of hubCategories) {
+        const row = document.createElement('tr');
+        const label = document.createElement('th');
+        label.scope = 'row';
+        label.textContent = category.label;
+        row.append(label);
+        for (const count of (site.nationalHubCounts?.[category.key] || [0, 0, 0])) {
+          const cell = document.createElement('td');
+          cell.textContent = Number(count).toLocaleString();
+          row.append(cell);
+        }
+        hubRows.append(row);
+      }
+      document.getElementById('hub-source').textContent = `경상북도 POI 분류표 기준 · 대상 위치 ${Number(hubPoiCount).toLocaleString()}개를 분류해 산업단지 중심점에서 직선거리로 집계`;
+    }
     title.textContent = site.name;
     resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;
     setStatus(`선택한 산업단지에서 5km 이내 학교 ${nearby.length.toLocaleString()}곳을 표시했습니다.`);
