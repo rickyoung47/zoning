@@ -138,63 +138,63 @@
   }
 
   function renderRankings() {
-    const scores = industries.map(site => {
+    const facilityCounts = industries.map(site => {
       const metrics = networkData.byIndustry[site.id]?.counts || {};
-      const counts = { '초등학교': metrics.elementary || [0, 0, 0], '중학교': metrics.middle || [0, 0, 0] };
-      return { ...site, counts };
+      const totals = Array(rings.length).fill(0);
+      for (const key of ['elementary', 'middle', 'highSchools', 'hospitals', 'emergency']) {
+        (metrics[key] || []).forEach((count, index) => { totals[index] += Number(count) || 0; });
+      }
+      for (const values of Object.values(metrics.hub || {})) {
+        values.forEach((count, index) => { totals[index] += Number(count) || 0; });
+      }
+      return { ...site, facilityCounts: totals };
     });
 
     rings.forEach((radius, index) => {
-      const topTen = [...scores]
-        .sort((a, b) => {
-          const totalA = a.counts['초등학교'][index] + a.counts['중학교'][index];
-          const totalB = b.counts['초등학교'][index] + b.counts['중학교'][index];
-          return totalB - totalA || b.counts['초등학교'][index] - a.counts['초등학교'][index] || a.name.localeCompare(b.name, 'ko');
-        })
-        .slice(0, 10);
-      const maxTotal = Math.max(1, ...topTen.map(site => site.counts['초등학교'][index] + site.counts['중학교'][index]));
-      const container = document.getElementById(`rank-${radius}`);
-      container.replaceChildren();
-
-      for (const [rank, site] of topTen.entries()) {
-        const elementary = site.counts['초등학교'][index];
-        const middle = site.counts['중학교'][index];
-        const total = elementary + middle;
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'rank-row';
-        row.setAttribute('aria-label', `${rank + 1}위 ${site.name}, 초등학교 ${elementary}곳, 중학교 ${middle}곳. 눌러 지도에서 선택`);
-        row.title = `${site.name} · ${site.id} · 초등학교 ${elementary}곳, 중학교 ${middle}곳`;
-
-        const number = document.createElement('span');
-        number.className = 'rank-number';
-        number.textContent = String(rank + 1).padStart(2, '0');
-        const main = document.createElement('span');
-        main.className = 'rank-main';
-        const name = document.createElement('span');
-        name.className = 'rank-name';
-        name.textContent = site.name;
-        const track = document.createElement('span');
-        track.className = 'rank-track';
-        const elementaryBar = document.createElement('span');
-        elementaryBar.className = 'rank-segment elementary';
-        elementaryBar.style.width = `${elementary / maxTotal * 100}%`;
-        const middleBar = document.createElement('span');
-        middleBar.className = 'rank-segment middle';
-        middleBar.style.width = `${middle / maxTotal * 100}%`;
-        track.append(elementaryBar, middleBar);
-        main.append(name, track);
-        const totalLabel = document.createElement('span');
-        totalLabel.className = 'rank-total';
-        totalLabel.textContent = total.toLocaleString();
-        row.append(number, main, totalLabel);
-        row.addEventListener('click', () => {
-          candidateList.hidden = true;
-          input.value = site.name;
-          selectIndustry(site);
-          document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
-        container.append(row);
+      const byHighCount = [...facilityCounts].sort((a, b) =>
+        b.facilityCounts[index] - a.facilityCounts[index] || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
+      );
+      const byLowCount = [...facilityCounts].sort((a, b) =>
+        a.facilityCounts[index] - b.facilityCounts[index] || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
+      );
+      const maximum = Math.max(1, ...byHighCount.map(site => site.facilityCounts[index]));
+      for (const [kind, sites] of [['top', byHighCount.slice(0, 10)], ['bottom', byLowCount.slice(0, 10)]]) {
+        const container = document.getElementById(`rank-${kind}-${radius}`);
+        container.replaceChildren();
+        for (const [rank, site] of sites.entries()) {
+          const total = site.facilityCounts[index];
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'rank-row';
+          row.setAttribute('aria-label', `${rank + 1}위 ${site.name}, 전체 시설 ${total}개. 눌러 지도에서 선택`);
+          row.title = `${site.name} · ${site.id} · 전체 시설 ${total.toLocaleString()}개`;
+          const number = document.createElement('span');
+          number.className = 'rank-number';
+          number.textContent = String(rank + 1).padStart(2, '0');
+          const main = document.createElement('span');
+          main.className = 'rank-main';
+          const name = document.createElement('span');
+          name.className = 'rank-name';
+          name.textContent = site.name;
+          const track = document.createElement('span');
+          track.className = `rank-track radius-${radius}`;
+          const bar = document.createElement('span');
+          bar.className = 'rank-bar';
+          bar.style.width = total ? `${Math.max(2, total / maximum * 100)}%` : '0%';
+          track.append(bar);
+          main.append(name, track);
+          const totalLabel = document.createElement('span');
+          totalLabel.className = 'rank-total';
+          totalLabel.textContent = total.toLocaleString();
+          row.append(number, main, totalLabel);
+          row.addEventListener('click', () => {
+            candidateList.hidden = true;
+            input.value = site.name;
+            selectIndustry(site);
+            document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+          container.append(row);
+        }
       }
     });
   }
