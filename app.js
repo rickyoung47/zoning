@@ -333,10 +333,46 @@
     selection.clearLayers();
     const nearby = [];
     const networkCounts = networkData.byIndustry[site.id]?.counts || {};
-    const counts = { '초등학교': networkCounts.elementary || [0, 0, 0], '중학교': networkCounts.middle || [0, 0, 0] };
-    const hospitalCounts = networkCounts.hospitals || [0, 0, 0];
-    const emergencyCounts = networkCounts.emergency || [0, 0, 0];
-    const highSchoolCounts = networkCounts.highSchools || [0, 0, 0];
+    const facilityRows = document.getElementById('facility-count-rows');
+    const hubCounts = networkCounts.hub || {};
+    const hasGyeongbukPoi = site.province === '경상북도';
+    const hubLabels = new Map(hubCategories.map(category => [category.key, category.label]));
+    const groups = [
+      { label: '주거', items: [{ key: 'housing' }] },
+      { label: '교통', items: [{ key: 'bus' }, { key: 'rail' }] },
+      { label: '보육 및 교육', items: [{ key: 'childcare' }, { label: '초등학교', value: 'elementary' }, { label: '중학교', value: 'middle' }, { label: '고등학교', value: 'highSchools' }, { key: 'education' }] },
+      { label: '의료', items: [{ label: '병·의원', value: 'hospitals' }, { label: '응급의료기관', value: 'emergency' }] },
+      { label: '상업 및 금융', items: [{ key: 'food_drink' }, { key: 'finance' }] },
+      { label: '공원', items: [{ key: 'neighborhood_park' }, { key: 'small_park' }, { key: 'children_park' }, { key: 'waterside_park' }, { key: 'sports_park' }] },
+      { label: '복지', items: [{ key: 'welfare' }] },
+      { label: '문화 및 체육', items: [{ key: 'sports' }, { key: 'leisure' }, { key: 'beauty' }] },
+    ];
+    facilityRows.replaceChildren();
+    for (const group of groups) {
+      group.items.forEach((item, index) => {
+        const row = document.createElement('tr');
+        if (index === 0) {
+          row.classList.add('group-start');
+          const groupCell = document.createElement('th');
+          groupCell.scope = 'rowgroup';
+          groupCell.rowSpan = group.items.length;
+          groupCell.textContent = group.label;
+          row.append(groupCell);
+        }
+        const key = item.key;
+        const values = item.value ? networkCounts[item.value] || [0, 0, 0] : (hasGyeongbukPoi ? hubCounts[key] || [0, 0, 0] : null);
+        const facilityCell = document.createElement('th');
+        facilityCell.scope = 'row';
+        facilityCell.textContent = item.label || hubLabels.get(key) || key;
+        row.append(facilityCell);
+        for (let i = 0; i < rings.length; i++) {
+          const cell = document.createElement('td');
+          cell.textContent = values ? Number(values[i] || 0).toLocaleString() : '-';
+          row.append(cell);
+        }
+        facilityRows.append(row);
+      });
+    }
     for (const { school, distance } of nearbySchools(site)) {
       nearby.push({ school, distance });
     }
@@ -370,38 +406,6 @@
         .addTo(selection);
     }
 
-    for (const [prefix, level] of [['elem', '초등학교'], ['middle', '중학교']]) {
-      rings.forEach((radius, i) => {
-        document.getElementById(`${prefix}-${radius}`).textContent = counts[level][i].toLocaleString();
-      });
-    }
-    rings.forEach((radius, i) => {
-      document.getElementById(`hospital-${radius}`).textContent = hospitalCounts[i].toLocaleString();
-      document.getElementById(`emergency-${radius}`).textContent = emergencyCounts[i].toLocaleString();
-      document.getElementById(`highschool-${radius}`).textContent = highSchoolCounts[i].toLocaleString();
-    });
-    const hubPanel = document.getElementById('hub-results');
-    const hubRows = document.getElementById('hub-count-rows');
-    const hubCounts = networkCounts.hub || {};
-    const showHubCounts = site.province === '경상북도';
-    hubPanel.hidden = !showHubCounts;
-    if (showHubCounts) {
-      hubRows.replaceChildren();
-      for (const category of hubCategories) {
-        const row = document.createElement('tr');
-        const label = document.createElement('th');
-        label.scope = 'row';
-        label.textContent = category.label;
-        row.append(label);
-        for (const count of (hubCounts[category.key] || [0, 0, 0])) {
-          const cell = document.createElement('td');
-          cell.textContent = Number(count).toLocaleString();
-          row.append(cell);
-        }
-        hubRows.append(row);
-      }
-      document.getElementById('hub-source').textContent = `경상북도 POI 분류표 기준 · OSM 도로망 최단거리 · 시설과 도로망 위치 연결 오차 최대 500m · OSM 자료일 ${networkData.retrieved || '미확인'}`;
-    }
     title.textContent = site.name;
     resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;
     setStatus(`선택한 산업단지에서 5km 이내 학교 ${nearby.length.toLocaleString()}곳을 표시했습니다.`);

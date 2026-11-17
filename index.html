@@ -57,18 +57,12 @@
           <p class="eyebrow">NEARBY FACILITIES</p>
           <h2 id="results-title">반경별 주변 시설 수</h2>
         </div>
-        <p id="results-subtitle">산업단지를 선택하면 주변 학교 수를 계산합니다.</p>
+        <p id="results-subtitle">산업단지를 선택하면 시설 종류별 주변 개수를 계산합니다.</p>
       </div>
       <div class="table-wrap">
-        <table>
-          <thead><tr><th scope="col">시설 종류</th><th scope="col">700m 이내</th><th scope="col">2km 이내</th><th scope="col">5km 이내</th></tr></thead>
-          <tbody>
-            <tr><th scope="row"><span class="school-chip elementary">초등학교</span></th><td id="elem-700">—</td><td id="elem-2000">—</td><td id="elem-5000">—</td></tr>
-            <tr><th scope="row"><span class="school-chip middle">중학교</span></th><td id="middle-700">—</td><td id="middle-2000">—</td><td id="middle-5000">—</td></tr>
-            <tr><th scope="row"><span class="school-chip highschool">고등학교</span></th><td id="highschool-700">—</td><td id="highschool-2000">—</td><td id="highschool-5000">—</td></tr>
-            <tr><th scope="row"><span class="school-chip hospital">병·의원</span></th><td id="hospital-700">—</td><td id="hospital-2000">—</td><td id="hospital-5000">—</td></tr>
-            <tr><th scope="row"><span class="school-chip emergency">응급의료기관</span></th><td id="emergency-700">—</td><td id="emergency-2000">—</td><td id="emergency-5000">—</td></tr>
-          </tbody>
+        <table class="facility-count-table">
+          <thead><tr><th scope="col">분류</th><th scope="col">시설 종류</th><th scope="col">700m 이내</th><th scope="col">2km 이내</th><th scope="col">5km 이내</th></tr></thead>
+          <tbody id="facility-count-rows"></tbody>
         </table>
       </div>
       <p class="method-note">각 수치는 OSM 보행 가능 도로망의 최단 경로 거리 기준 누적 개수입니다. 지도 외곽선은 도달 가능한 도로 위치를 둘러싼 단순화된 윤곽이며, 학교는 네트워크 거리 5km 이내만 표시합니다.</p>
@@ -76,16 +70,7 @@
       <p id="emergency-source" class="method-note">응급의료기관 위치 자료를 불러오는 중입니다.</p>
       <p id="highschool-source" class="method-note">고등학교 위치 자료를 불러오는 중입니다.</p>
       <p id="network-source" class="method-note">OSM 도로망 거리 자료를 불러오는 중입니다.</p>
-      <section id="hub-results" class="hub-results" hidden aria-labelledby="hub-results-title">
-        <div class="hub-heading"><h3 id="hub-results-title">경상북도 국가거점 시설</h3><span>선택 산업단지 중심 반경별 개수</span></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th scope="col">시설 분류</th><th scope="col">700m 이내</th><th scope="col">2km 이내</th><th scope="col">5km 이내</th></tr></thead>
-            <tbody id="hub-count-rows"></tbody>
-          </table>
-        </div>
-        <p id="hub-source" class="method-note"></p>
-      </section>
+      <p class="method-note">경북 TN_POI 시설은 분류별로 집계하며, 자료가 없는 경북 외 지역은 -로 표시합니다.</p>
     </section>
 
     <section class="rankings" aria-labelledby="rankings-title">
