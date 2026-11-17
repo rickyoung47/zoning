@@ -31,6 +31,7 @@
   let emergencyFacilities = [];
   let hubCategories = [];
   let hubPoiCount = 0;
+  let poiCoverage = new Set();
   let networkData = { byIndustry: {} };
   let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
@@ -136,12 +137,6 @@
     return counts;
   }
 
-  function nearbySchools(site) {
-    const record = networkData.byIndustry[site.id];
-    if (!record) return [];
-    return record.nearbySchools.map(([index, distance]) => ({ school: schools[index], distance })).filter(item => item.school);
-  }
-
   function renderRankings() {
     const scores = industries.map(site => {
       const metrics = networkData.byIndustry[site.id]?.counts || {};
@@ -240,6 +235,7 @@
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     hubCategories = data.hubCategories || [];
     hubPoiCount = data.hubPoiCount || 0;
+    poiCoverage = new Set(data.poiCoverage || []);
     schools = data.schools.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     highSchools = (data.highSchools || []).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     hospitals = hospitalData.facilities.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
@@ -331,11 +327,10 @@
 
   function selectIndustry(site) {
     selection.clearLayers();
-    const nearby = [];
     const networkCounts = networkData.byIndustry[site.id]?.counts || {};
     const facilityRows = document.getElementById('facility-count-rows');
     const hubCounts = networkCounts.hub || {};
-    const hasGyeongbukPoi = site.province === '경상북도';
+    const hasPoiData = poiCoverage.has(site.province) || (!site.province && poiCoverage.size > 0);
     const hubLabels = new Map(hubCategories.map(category => [category.key, category.label]));
     const groups = [
       { label: '주거', items: [{ key: 'housing' }] },
@@ -360,7 +355,7 @@
           row.append(groupCell);
         }
         const key = item.key;
-        const values = item.value ? networkCounts[item.value] || [0, 0, 0] : (hasGyeongbukPoi ? hubCounts[key] || [0, 0, 0] : null);
+        const values = item.value ? networkCounts[item.value] || [0, 0, 0] : (hasPoiData ? hubCounts[key] || [0, 0, 0] : null);
         const facilityCell = document.createElement('th');
         facilityCell.scope = 'row';
         facilityCell.textContent = item.label || hubLabels.get(key) || key;
@@ -373,10 +368,6 @@
         facilityRows.append(row);
       });
     }
-    for (const { school, distance } of nearbySchools(site)) {
-      nearby.push({ school, distance });
-    }
-
     // Draw the widest OSM network catchment first so the closer boundaries remain visible.
     const contours = networkData.byIndustry[site.id]?.contours || [];
     for (const index of [...rings.keys()].reverse()) {
@@ -396,19 +387,12 @@
     }
     const icon = L.divIcon({ className: '', html: '<div class="site-marker"></div>', iconSize: [24, 24], iconAnchor: [12, 12] });
     L.marker([site.lat, site.lon], { icon, pane: 'site', zIndexOffset: 1000 })
-      .bindPopup(`<div class="site-popup"><strong>${esc(site.name)}</strong><br>주변 5km 내 학교 ${nearby.length.toLocaleString()}곳</div>`)
+      .bindPopup(`<div class="site-popup"><strong>${esc(site.name)}</strong></div>`)
       .addTo(selection);
-    for (const { school, distance } of nearby) {
-      const levelClass = school.level === '초등학교' ? 'elementary' : 'middle';
-      const icon = L.divIcon({ className: '', html: `<div class="school-marker ${levelClass}"></div>`, iconSize: [9, 9], iconAnchor: [4.5, 4.5] });
-      L.marker([school.lat, school.lon], { icon, pane: 'schools' })
-        .bindPopup(`<div class="school-popup"><b>${esc(school.name)}</b><br>${esc(school.level)} · ${(distance / 1000).toFixed(2)}km<br>${esc(school.address)}</div>`)
-        .addTo(selection);
-    }
 
     title.textContent = site.name;
     resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;
-    setStatus(`선택한 산업단지에서 5km 이내 학교 ${nearby.length.toLocaleString()}곳을 표시했습니다.`);
+    setStatus('선택한 산업단지의 시설별 거리를 표에 갱신했습니다.');
     input.value = site.name;
     const boundary = industrialBoundaryById.get(String(site.id));
     const focusBounds = boundary
