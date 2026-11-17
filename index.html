@@ -74,7 +74,7 @@
     <section class="rankings" aria-labelledby="rankings-title">
       <div class="rankings-heading">
         <div>
-          <p class="eyebrow">SCHOOL ACCESS RANKING</p>
+          <p class="eyebrow">FACILITY TYPE BALANCE</p>
           <h2 id="rankings-title">시설 유형 균형 점수 상·하위 10곳</h2>
         </div>
         <p>시설 유형별 반경 최대값을 100으로 정규화해 같은 비중으로 평균</p>
@@ -98,6 +98,42 @@
         </article>
       </div>
       <p class="ranking-legend-note">점수는 각 시설 유형의 반경별 최대 개수 대비 비율의 평균입니다. 막대를 누르면 산업단지를 지도에서 선택합니다.</p>
+    </section>
+
+    <section class="rankings" aria-labelledby="inside-ranking-title">
+      <div class="rankings-heading">
+        <div>
+          <p class="eyebrow">FACILITIES INSIDE INDUSTRIAL BOUNDARY</p>
+          <h2 id="inside-ranking-title">산업단지 내부 시설 수 상·하위 10곳</h2>
+        </div>
+        <p>경계 안 전체 시설 종류 개수 합계</p>
+      </div>
+      <div class="inside-ranking-grid">
+        <article class="facility-ranking-card" aria-labelledby="inside-top-title">
+          <div class="ranking-card-heading"><h3 id="inside-top-title">내부 시설 수 상위 10곳</h3><span>TOP 10</span></div>
+          <div id="rank-inside-top" class="ranking-list" aria-live="polite"></div>
+        </article>
+        <article class="facility-ranking-card" aria-labelledby="inside-bottom-title">
+          <div class="ranking-card-heading"><h3 id="inside-bottom-title">내부 시설 수 하위 10곳</h3><span>BOTTOM 10</span></div>
+          <div id="rank-inside-bottom" class="ranking-list" aria-live="polite"></div>
+        </article>
+      </div>
+      <p class="ranking-legend-note">경계가 없는 산업단지 97곳은 내부 시설 수를 계산할 수 없어 제외했습니다. 막대를 누르면 지도에서 산업단지를 선택합니다.</p>
+    </section>
+
+    <section class="rankings" aria-labelledby="weighted-ranking-title">
+      <div class="rankings-heading">
+        <div>
+          <p class="eyebrow">WEIGHTED FACILITY SCORE</p>
+          <h2 id="weighted-ranking-title">시설 접근 가중 점수 상위 50곳</h2>
+        </div>
+        <p>상위 10곳부터 표시 · 목록을 스크롤해 50위까지 확인</p>
+      </div>
+      <p class="weighted-score-formula">700m 시설 수 × 3 + 2km 시설 수 × 2 + 5km 시설 수 × 1 + 산업단지 내부 시설 수 × 4</p>
+      <div class="weighted-ranking-scroll" role="region" aria-label="시설 접근 가중 점수 상위 50 산업단지" tabindex="0">
+        <div id="rank-weighted-top" class="ranking-list" aria-live="polite"></div>
+      </div>
+      <p class="ranking-legend-note">경계가 없는 산업단지 97곳은 내부 점수 자료가 없어 제외했습니다. 시설 수는 반경별 누적값이므로 여러 반경 가중치에 반영됩니다.</p>
     </section>
 
     <footer>자료: 국토교통부 산업단지 위치 · 한국교육시설안전원 학교 위치 · 국립중앙의료원 병·의원 찾기 서비스 · 국립중앙의료원 응급의료정보조회 서비스 · 도로망 © OpenStreetMap contributors (ODbL)</footer>

@@ -202,6 +202,93 @@
         }
       }
     });
+    renderInsideRankings();
+    renderWeightedRankings();
+  }
+
+  function totalFacilityCount(metrics, radiusIndex) {
+    let total = 0;
+    for (const key of ['elementary', 'middle', 'highSchools', 'hospitals', 'emergency']) {
+      total += Number(metrics[key]?.[radiusIndex]) || 0;
+    }
+    for (const values of Object.values(metrics.hub || {})) total += Number(values[radiusIndex]) || 0;
+    return total;
+  }
+
+  function totalInsideFacilityCount(insideCounts) {
+    if (!insideCounts) return null;
+    let total = 0;
+    for (const key of ['elementary', 'middle', 'highSchools', 'hospitals', 'emergency']) {
+      total += Number(insideCounts[key]) || 0;
+    }
+    for (const count of Object.values(insideCounts.hub || {})) total += Number(count) || 0;
+    return total;
+  }
+
+  function renderSiteRankRows(containerId, sites, valueKey, maximum, styleName, unit) {
+    const container = document.getElementById(containerId);
+    container.replaceChildren();
+    for (const [index, site] of sites.entries()) {
+      const value = site[valueKey];
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'rank-row';
+      row.setAttribute('aria-label', `${index + 1}위 ${site.name}, ${value.toLocaleString()}${unit}. 눌러 지도에서 선택`);
+      row.title = `${site.name} · ${site.id} · ${value.toLocaleString()}${unit}`;
+      const number = document.createElement('span');
+      number.className = 'rank-number';
+      number.textContent = String(index + 1).padStart(2, '0');
+      const main = document.createElement('span');
+      main.className = 'rank-main';
+      const name = document.createElement('span');
+      name.className = 'rank-name';
+      name.textContent = site.name;
+      const track = document.createElement('span');
+      track.className = `rank-track ${styleName}`;
+      const bar = document.createElement('span');
+      bar.className = 'rank-bar';
+      bar.style.width = value ? `${Math.max(2, value / Math.max(1, maximum) * 100)}%` : '0%';
+      track.append(bar);
+      main.append(name, track);
+      const label = document.createElement('span');
+      label.className = 'rank-total';
+      label.textContent = value.toLocaleString();
+      row.append(number, main, label);
+      row.addEventListener('click', () => {
+        candidateList.hidden = true;
+        input.value = site.name;
+        selectIndustry(site);
+        document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      container.append(row);
+    }
+  }
+
+  function renderInsideRankings() {
+    const sites = industries.map(site => {
+      const insideCounts = networkData.byIndustry[site.id]?.insideFacilityCounts;
+      return { ...site, insideTotal: totalInsideFacilityCount(insideCounts) };
+    }).filter(site => site.insideTotal !== null);
+    const byHigh = [...sites].sort((a, b) => b.insideTotal - a.insideTotal || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id)));
+    const byLow = [...sites].sort((a, b) => a.insideTotal - b.insideTotal || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id)));
+    const maximum = Math.max(1, ...sites.map(site => site.insideTotal));
+    renderSiteRankRows('rank-inside-top', byHigh.slice(0, 10), 'insideTotal', maximum, 'rank-track-inside', '곳');
+    renderSiteRankRows('rank-inside-bottom', byLow.slice(0, 10), 'insideTotal', maximum, 'rank-track-inside', '곳');
+  }
+
+  function renderWeightedRankings() {
+    const sites = industries.map(site => {
+      const record = networkData.byIndustry[site.id];
+      const insideTotal = totalInsideFacilityCount(record?.insideFacilityCounts);
+      if (insideTotal === null) return null;
+      const metrics = record?.counts || {};
+      const counts700 = totalFacilityCount(metrics, 0);
+      const counts2000 = totalFacilityCount(metrics, 1);
+      const counts5000 = totalFacilityCount(metrics, 2);
+      return { ...site, weightedScore: counts700 * 3 + counts2000 * 2 + counts5000 + insideTotal * 4 };
+    }).filter(Boolean).sort((a, b) => b.weightedScore - a.weightedScore || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))).slice(0, 50);
+    const maximum = Math.max(1, ...sites.map(site => site.weightedScore));
+    renderSiteRankRows('rank-weighted-top', sites, 'weightedScore', maximum, 'rank-track-weighted', '점');
   }
 
   function askToChoose(candidates) {
