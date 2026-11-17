@@ -32,6 +32,7 @@
   let hubCategories = [];
   let hubPoiCount = 0;
   let networkData = { byIndustry: {} };
+  let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
   let hospitalGrid = new Map();
@@ -233,6 +234,8 @@
     fetch('network_data.json').then(r => { if (!r.ok) throw new Error('OSM 도로망 거리 자료 로드 실패'); return r.json(); })
   ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network]) => {
     networkData = network;
+    industrialBoundaryById = new Map(industrialBoundaries.features.map(feature => [String(feature.properties.dan_id), feature]));
+    document.getElementById('network-source').textContent = `거리 집계: 산업단지 경계를 100m 간격 다중 시작점으로 네트워크에 연결해 계산합니다. 경계 안 시설은 0m로 포함하며, 경계 없는 산업단지는 기존 좌표점 시작점을 사용합니다. OSM 기준일 ${networkData.retrieved || '미확인'}`;
     document.getElementById('network-source').textContent = `거리 집계 자료: OpenStreetMap 보행 가능 도로망 · 기준일 ${networkData.retrieved || '미확인'} · 위치를 최근접 도로 노드에 연결해 계산`;
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     hubCategories = data.hubCategories || [];
@@ -403,7 +406,11 @@
     resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;
     setStatus(`선택한 산업단지에서 5km 이내 학교 ${nearby.length.toLocaleString()}곳을 표시했습니다.`);
     input.value = site.name;
-    map.fitBounds(L.latLngBounds([site.lat, site.lon], [site.lat, site.lon]).pad(0.085), { maxZoom: 13, animate: true });
+    const boundary = industrialBoundaryById.get(String(site.id));
+    const focusBounds = boundary
+      ? L.geoJSON(boundary).getBounds()
+      : L.latLngBounds([site.lat, site.lon], [site.lat, site.lon]);
+    map.fitBounds(focusBounds.pad(boundary ? 0.08 : 0.085), { maxZoom: 13, animate: true });
   }
 
   document.getElementById('search-button').addEventListener('click', chooseIndustry);
