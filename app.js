@@ -31,6 +31,7 @@
   let emergencyFacilities = [];
   let hubCategories = [];
   let hubPoiCount = 0;
+  let networkData = { byIndustry: {} };
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
   let hospitalGrid = new Map();
@@ -135,29 +136,15 @@
   }
 
   function nearbySchools(site) {
-    const latCell = Math.floor(site.lat / gridCellSize);
-    const lonCell = Math.floor(site.lon / gridCellSize);
-    const nearby = [];
-    for (let latOffset = -1; latOffset <= 1; latOffset++) {
-      for (let lonOffset = -2; lonOffset <= 2; lonOffset++) {
-        const cell = schoolGrid.get(`${latCell + latOffset}:${lonCell + lonOffset}`) || [];
-        for (const school of cell) {
-          const distance = haversine(site.lat, site.lon, school.lat, school.lon);
-          if (distance <= 5000) nearby.push({ school, distance });
-        }
-      }
-    }
-    return nearby;
+    const record = networkData.byIndustry[site.id];
+    if (!record) return [];
+    return record.nearbySchools.map(([index, distance]) => ({ school: schools[index], distance })).filter(item => item.school);
   }
 
   function renderRankings() {
     const scores = industries.map(site => {
-      const counts = { '초등학교': [0, 0, 0], '중학교': [0, 0, 0] };
-      for (const { school, distance } of nearbySchools(site)) {
-        for (let i = 0; i < rings.length; i++) {
-          if (distance <= rings[i]) counts[school.level][i]++;
-        }
-      }
+      const metrics = networkData.byIndustry[site.id]?.counts || {};
+      const counts = { '초등학교': metrics.elementary || [0, 0, 0], '중학교': metrics.middle || [0, 0, 0] };
       return { ...site, counts };
     });
 
@@ -242,8 +229,11 @@
     fetch('provinces.geojson').then(r => { if (!r.ok) throw new Error('경계 파일 로드 실패'); return r.json(); }),
     fetch('industrial_boundaries.geojson').then(r => { if (!r.ok) throw new Error('산업단지 경계 데이터 로드 실패'); return r.json(); }),
     fetch('hospitals.json').then(r => { if (!r.ok) throw new Error('병·의원 자료 로드 실패'); return r.json(); }),
-    fetch('emergency_facilities.json').then(r => { if (!r.ok) throw new Error('응급의료기관 자료 로드 실패'); return r.json(); })
-  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData]) => {
+    fetch('emergency_facilities.json').then(r => { if (!r.ok) throw new Error('응급의료기관 자료 로드 실패'); return r.json(); }),
+    fetch('network_data.json').then(r => { if (!r.ok) throw new Error('OSM 도로망 거리 자료 로드 실패'); return r.json(); })
+  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network]) => {
+    networkData = network;
+    document.getElementById('network-source').textContent = `거리 집계 자료: OpenStreetMap 보행 가능 도로망 · 기준일 ${networkData.retrieved || '미확인'} · 위치를 최근접 도로 노드에 연결해 계산`;
     industries = data.industries.filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
     hubCategories = data.hubCategories || [];
     hubPoiCount = data.hubPoiCount || 0;
@@ -275,6 +265,7 @@
       style: { color: '#b54e32', weight: 1, opacity: 0.9, fillColor: '#db8567', fillOpacity: 0.06, lineJoin: 'round' }
     }).addTo(map);
     map.attributionControl.addAttribution('산업단지 경계: 국토교통부 DAM_DAN');
+    map.attributionControl.addAttribution('도로망 © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>');
     const industryMarkers = L.layerGroup().addTo(map);
     for (const site of industries) {
       L.circleMarker([site.lat, site.lon], {
@@ -327,26 +318,30 @@
   function selectIndustry(site) {
     selection.clearLayers();
     const nearby = [];
-    const counts = { '초등학교': [0, 0, 0], '중학교': [0, 0, 0] };
-    const hospitalCounts = nearbyHospitalCounts(site);
-    const emergencyCounts = nearbyEmergencyCounts(site);
-    const highSchoolCounts = nearbyHighSchoolCounts(site);
+    const networkCounts = networkData.byIndustry[site.id]?.counts || {};
+    const counts = { '초등학교': networkCounts.elementary || [0, 0, 0], '중학교': networkCounts.middle || [0, 0, 0] };
+    const hospitalCounts = networkCounts.hospitals || [0, 0, 0];
+    const emergencyCounts = networkCounts.emergency || [0, 0, 0];
+    const highSchoolCounts = networkCounts.highSchools || [0, 0, 0];
     for (const { school, distance } of nearbySchools(site)) {
       nearby.push({ school, distance });
-      for (let i = 0; i < rings.length; i++) if (distance <= rings[i]) counts[school.level][i]++;
     }
 
-    // Draw the largest ring first so the smaller distance bands stay visible.
-    for (const radius of [...rings].reverse()) {
-      L.circle([site.lat, site.lon], {
-        radius,
+    // Draw the widest OSM network catchment first so the closer boundaries remain visible.
+    const contours = networkData.byIndustry[site.id]?.contours || [];
+    for (const index of [...rings.keys()].reverse()) {
+      const radius = rings[index];
+      const points = contours[index] || [];
+      if (points.length < 3) continue;
+      L.polygon(points.map(([lon, lat]) => [lat, lon]), {
         pane: 'circles',
         color: radius === 700 ? '#e36e43' : radius === 2000 ? '#6c89b5' : '#95a5bc',
         weight: radius === 700 ? 2 : 1.4,
         opacity: 0.95,
         fillColor: radius === 700 ? '#f4a275' : '#aabbd2',
         fillOpacity: radius === 700 ? 0.10 : 0.035,
-        interactive: false
+        interactive: false,
+        smoothFactor: 2
       }).addTo(selection);
     }
     const icon = L.divIcon({ className: '', html: '<div class="site-marker"></div>', iconSize: [24, 24], iconAnchor: [12, 12] });
@@ -373,6 +368,7 @@
     });
     const hubPanel = document.getElementById('hub-results');
     const hubRows = document.getElementById('hub-count-rows');
+    const hubCounts = networkCounts.hub || {};
     const showHubCounts = site.province === '경상북도';
     hubPanel.hidden = !showHubCounts;
     if (showHubCounts) {
@@ -383,14 +379,14 @@
         label.scope = 'row';
         label.textContent = category.label;
         row.append(label);
-        for (const count of (site.nationalHubCounts?.[category.key] || [0, 0, 0])) {
+        for (const count of (hubCounts[category.key] || [0, 0, 0])) {
           const cell = document.createElement('td');
           cell.textContent = Number(count).toLocaleString();
           row.append(cell);
         }
         hubRows.append(row);
       }
-      document.getElementById('hub-source').textContent = `경상북도 POI 분류표 기준 · 대상 위치 ${Number(hubPoiCount).toLocaleString()}개를 분류해 산업단지 중심점에서 직선거리로 집계`;
+      document.getElementById('hub-source').textContent = `경상북도 POI 분류표 기준 · OSM 도로망 최단거리 · 시설과 도로망 위치 연결 오차 최대 500m · OSM 자료일 ${networkData.retrieved || '미확인'}`;
     }
     title.textContent = site.name;
     resultsSubtitle.textContent = `${site.name} 기준 · 각 반경 안의 누적 시설 수`;
