@@ -138,36 +138,41 @@
   }
 
   function renderRankings() {
-    const facilityCounts = industries.map(site => {
+    const facilityTypes = ['elementary', 'middle', 'highSchools', 'hospitals', 'emergency', ...hubCategories.map(category => category.key)];
+    const siteCounts = industries.map(site => {
       const metrics = networkData.byIndustry[site.id]?.counts || {};
-      const totals = Array(rings.length).fill(0);
-      for (const key of ['elementary', 'middle', 'highSchools', 'hospitals', 'emergency']) {
-        (metrics[key] || []).forEach((count, index) => { totals[index] += Number(count) || 0; });
-      }
-      for (const values of Object.values(metrics.hub || {})) {
-        values.forEach((count, index) => { totals[index] += Number(count) || 0; });
-      }
-      return { ...site, facilityCounts: totals };
+      const typeCounts = facilityTypes.map(key => key in (metrics.hub || {})
+        ? metrics.hub[key] || [0, 0, 0]
+        : metrics[key] || [0, 0, 0]);
+      return { ...site, typeCounts };
     });
 
     rings.forEach((radius, index) => {
-      const byHighCount = [...facilityCounts].sort((a, b) =>
-        b.facilityCounts[index] - a.facilityCounts[index] || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
+      const typeMaxima = facilityTypes.map((_, typeIndex) => Math.max(0, ...siteCounts.map(site => site.typeCounts[typeIndex][index] || 0)));
+      const activeTypeCount = typeMaxima.filter(maximum => maximum > 0).length;
+      const scoredSites = siteCounts.map(site => {
+        const rawTotal = site.typeCounts.reduce((sum, values) => sum + (Number(values[index]) || 0), 0);
+        const normalized = site.typeCounts.reduce((sum, values, typeIndex) => {
+          const maximum = typeMaxima[typeIndex];
+          return sum + (maximum ? (Number(values[index]) || 0) / maximum : 0);
+        }, 0);
+        return { ...site, rawTotal, score: activeTypeCount ? normalized / activeTypeCount * 100 : 0 };
+      });
+      const byHighScore = [...scoredSites].sort((a, b) =>
+        b.score - a.score || b.rawTotal - a.rawTotal || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
       );
-      const byLowCount = [...facilityCounts].sort((a, b) =>
-        a.facilityCounts[index] - b.facilityCounts[index] || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
+      const byLowScore = [...scoredSites].sort((a, b) =>
+        a.score - b.score || a.rawTotal - b.rawTotal || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
       );
-      const maximum = Math.max(1, ...byHighCount.map(site => site.facilityCounts[index]));
-      for (const [kind, sites] of [['top', byHighCount.slice(0, 10)], ['bottom', byLowCount.slice(0, 10)]]) {
+      for (const [kind, sites] of [['top', byHighScore.slice(0, 10)], ['bottom', byLowScore.slice(0, 10)]]) {
         const container = document.getElementById(`rank-${kind}-${radius}`);
         container.replaceChildren();
         for (const [rank, site] of sites.entries()) {
-          const total = site.facilityCounts[index];
           const row = document.createElement('button');
           row.type = 'button';
           row.className = 'rank-row';
-          row.setAttribute('aria-label', `${rank + 1}위 ${site.name}, 전체 시설 ${total}개. 눌러 지도에서 선택`);
-          row.title = `${site.name} · ${site.id} · 전체 시설 ${total.toLocaleString()}개`;
+          row.setAttribute('aria-label', `${rank + 1}위 ${site.name}, 시설 유형 균형 점수 ${site.score.toFixed(1)}점, 전체 시설 ${site.rawTotal}개. 눌러 지도에서 선택`);
+          row.title = `${site.name} · ${site.id} · 균형 점수 ${site.score.toFixed(1)}점 · 전체 시설 ${site.rawTotal.toLocaleString()}개`;
           const number = document.createElement('span');
           number.className = 'rank-number';
           number.textContent = String(rank + 1).padStart(2, '0');
@@ -180,12 +185,12 @@
           track.className = `rank-track radius-${radius}`;
           const bar = document.createElement('span');
           bar.className = 'rank-bar';
-          bar.style.width = total ? `${Math.max(2, total / maximum * 100)}%` : '0%';
+          bar.style.width = site.score ? `${Math.max(2, site.score)}%` : '0%';
           track.append(bar);
           main.append(name, track);
           const totalLabel = document.createElement('span');
           totalLabel.className = 'rank-total';
-          totalLabel.textContent = total.toLocaleString();
+          totalLabel.textContent = `${site.score.toFixed(1)}`;
           row.append(number, main, totalLabel);
           row.addEventListener('click', () => {
             candidateList.hidden = true;
@@ -328,6 +333,7 @@
   function selectIndustry(site) {
     selection.clearLayers();
     const networkCounts = networkData.byIndustry[site.id]?.counts || {};
+    const insideCounts = networkData.byIndustry[site.id]?.insideFacilityCounts;
     const facilityRows = document.getElementById('facility-count-rows');
     const hubCounts = networkCounts.hub || {};
     const hasPoiData = poiCoverage.has(site.province) || (!site.province && poiCoverage.size > 0);
@@ -360,6 +366,10 @@
         facilityCell.scope = 'row';
         facilityCell.textContent = item.label || hubLabels.get(key) || key;
         row.append(facilityCell);
+        const insideCell = document.createElement('td');
+        const insideValue = item.value ? insideCounts?.[item.value] : insideCounts?.hub?.[key];
+        insideCell.textContent = insideCounts ? Number(insideValue || 0).toLocaleString() : '-';
+        row.append(insideCell);
         for (let i = 0; i < rings.length; i++) {
           const cell = document.createElement('td');
           cell.textContent = values ? Number(values[i] || 0).toLocaleString() : '-';
