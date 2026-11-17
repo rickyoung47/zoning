@@ -386,13 +386,8 @@
     const showHubCounts = site.province === '경상북도';
     hubPanel.hidden = !showHubCounts;
     if (showHubCounts) {
-      const childcareSummary = document.getElementById('childcare-summary');
-      const hasBoundary = Boolean(industrialBoundaryById.get(String(site.id)));
-      childcareSummary.hidden = !hasBoundary;
-      document.getElementById('childcare-inside-count').textContent = Number(networkData.byIndustry[site.id]?.childcareInsideCount || 0).toLocaleString();
       hubRows.replaceChildren();
       for (const category of hubCategories) {
-        if (category.key === 'childcare') continue;
         const row = document.createElement('tr');
         const label = document.createElement('th');
         label.scope = 'row';
