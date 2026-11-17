@@ -266,26 +266,37 @@
     }).addTo(map);
     map.attributionControl.addAttribution('산업단지 경계: 국토교통부 DAM_DAN');
     map.attributionControl.addAttribution('도로망 © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>');
+    const boundaryIds = new Set(industrialBoundaries.features.map(feature => String(feature.properties.dan_id)));
     const industryMarkers = L.layerGroup().addTo(map);
+    const noBoundaryMarkers = L.layerGroup().addTo(map);
+    let noBoundaryCount = 0;
     for (const site of industries) {
+      const hasBoundary = boundaryIds.has(String(site.id));
+      if (!hasBoundary) noBoundaryCount++;
       L.circleMarker([site.lat, site.lon], {
         pane: 'industrial-sites',
         renderer: industryCanvas,
-        radius: 5,
+        radius: hasBoundary ? 5 : 7,
         color: '#ffffff',
-        weight: 1.2,
-        fillColor: '#d99b26',
+        weight: hasBoundary ? 1.2 : 2,
+        fillColor: hasBoundary ? '#d99b26' : '#8353c6',
         fillOpacity: 0.96,
         bubblingMouseEvents: false
       })
-        .bindTooltip(`${site.name} · 지도에서 선택`, { direction: 'top', sticky: true })
+        .bindTooltip(hasBoundary ? `${site.name} · 지도에서 선택` : `${site.name} · 산업단지 경계 자료 없음 · 지도에서 선택`, { direction: 'top', sticky: true })
         .on('click', () => {
           candidateList.hidden = true;
           input.value = site.name;
           selectIndustry(site);
         })
-        .addTo(industryMarkers);
+        .addTo(hasBoundary ? industryMarkers : noBoundaryMarkers);
     }
+    const noBoundaryToggle = document.getElementById('toggle-no-boundary');
+    document.getElementById('no-boundary-count').textContent = noBoundaryCount.toLocaleString();
+    noBoundaryToggle.addEventListener('change', () => {
+      if (noBoundaryToggle.checked) noBoundaryMarkers.addTo(map);
+      else map.removeLayer(noBoundaryMarkers);
+    });
     renderRankings();
     map.fitBounds(regionLayer.getBounds(), { padding: [18, 18] });
     setStatus(`산업단지 ${industries.length.toLocaleString()}곳이 지도에 표시돼 있습니다. 점을 클릭하거나 이름을 검색하세요.`);
