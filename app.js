@@ -294,22 +294,23 @@
 
   function renderEntropyQuadrant() {
     const industriesById = new Map(industries.map(site => [String(site.id), site]));
+    let unavailableScoreCount = 0;
     const points = entropyData.records.map(record => {
       const site = industriesById.get(String(record.id));
       const data = networkData.byIndustry[String(record.id)];
       const insideTotal = totalInsideFacilityCount(data?.insideFacilityCounts);
-      if (!site || insideTotal === null) return null;
+      if (!site || insideTotal === null) { unavailableScoreCount++; return null; }
       const metrics = data?.counts || {};
       const weightedScore = totalFacilityCount(metrics, 0) * 3
         + totalFacilityCount(metrics, 1) * 2
         + totalFacilityCount(metrics, 2)
         + insideTotal * 4;
-      if (!(weightedScore > 0) || !Number.isFinite(record.entropy)) return null;
+      if (!(weightedScore > 0) || !Number.isFinite(record.entropy)) { unavailableScoreCount++; return null; }
       return { ...site, entropy: record.entropy, weightedScore };
     }).filter(Boolean);
     const host = document.getElementById('entropy-quadrant-chart');
     const note = document.getElementById('entropy-missing-note');
-    note.textContent = `엔트로피 결측 데이터 ${Number(entropyData.missingEntropyCount || 0).toLocaleString()}개는 그래프에서 제외했습니다.`;
+    note.textContent = `결측 데이터 ${Number((entropyData.missingEntropyCount || 0) + unavailableScoreCount).toLocaleString()}개는 그래프에서 제외했습니다.`;
     host.replaceChildren();
     if (!points.length) {
       host.textContent = '그래프에 표시할 데이터가 없습니다.';
