@@ -33,6 +33,7 @@
   let hubPoiCount = 0;
   let poiCoverage = new Set();
   let networkData = { byIndustry: {} };
+  let entropyData = { records: [], missingEntropyCount: 0 };
   let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
@@ -291,6 +292,128 @@
     renderSiteRankRows('rank-weighted-top', sites, 'weightedScore', maximum, 'rank-track-weighted', '점');
   }
 
+  function renderEntropyQuadrant() {
+    const industriesById = new Map(industries.map(site => [String(site.id), site]));
+    const points = entropyData.records.map(record => {
+      const site = industriesById.get(String(record.id));
+      const data = networkData.byIndustry[String(record.id)];
+      const insideTotal = totalInsideFacilityCount(data?.insideFacilityCounts);
+      if (!site || insideTotal === null) return null;
+      const metrics = data?.counts || {};
+      const weightedScore = totalFacilityCount(metrics, 0) * 3
+        + totalFacilityCount(metrics, 1) * 2
+        + totalFacilityCount(metrics, 2)
+        + insideTotal * 4;
+      if (!(weightedScore > 0) || !Number.isFinite(record.entropy)) return null;
+      return { ...site, entropy: record.entropy, weightedScore };
+    }).filter(Boolean);
+    const host = document.getElementById('entropy-quadrant-chart');
+    const note = document.getElementById('entropy-missing-note');
+    note.textContent = `엔트로피 결측 데이터 ${Number(entropyData.missingEntropyCount || 0).toLocaleString()}개는 그래프에서 제외했습니다.`;
+    host.replaceChildren();
+    if (!points.length) {
+      host.textContent = '그래프에 표시할 데이터가 없습니다.';
+      return;
+    }
+
+    const sortedMedian = values => {
+      const ordered = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(ordered.length / 2);
+      return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+    };
+    const medianEntropy = sortedMedian(points.map(point => point.entropy));
+    const medianScore = sortedMedian(points.map(point => point.weightedScore));
+    const width = 1000;
+    const height = 590;
+    const margin = { top: 42, right: 28, bottom: 88, left: 98 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const x = value => margin.left + value * plotWidth;
+    const maxScore = Math.max(...points.map(point => point.weightedScore));
+    const yMax = 10 ** Math.ceil(Math.log10(maxScore * 1.02));
+    const y = value => margin.top + (1 - Math.log10(Math.max(1, value)) / Math.log10(yMax)) * plotHeight;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `산업단지 ${points.length}곳의 엔트로피 지수와 시설 접근 가중 점수 사분면 그래프`);
+    const add = (tag, attributes = {}, text = '') => {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+      if (text) element.textContent = text;
+      svg.append(element);
+      return element;
+    };
+    add('title', {}, '용도 혼합 엔트로피와 시설 접근 가중 점수 사분면');
+
+    const scoreTicks = [1, 10, 100, 1000, 10000, 100000, 1000000].filter(value => value < yMax);
+    for (const value of scoreTicks) {
+      const py = y(value);
+      add('line', { x1: margin.left, y1: py, x2: width - margin.right, y2: py, class: 'quadrant-gridline' });
+      add('text', { x: margin.left - 12, y: py + 4, class: 'quadrant-tick', 'text-anchor': 'end' }, value.toLocaleString());
+    }
+    for (let tick = 0; tick <= 5; tick++) {
+      const value = tick / 5;
+      const px = x(value);
+      add('line', { x1: px, y1: margin.top, x2: px, y2: height - margin.bottom, class: 'quadrant-gridline' });
+      add('text', { x: px, y: height - margin.bottom + 23, class: 'quadrant-tick', 'text-anchor': 'middle' }, value.toFixed(1));
+    }
+    add('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: height - margin.bottom, class: 'quadrant-axis' });
+    add('line', { x1: margin.left, y1: height - margin.bottom, x2: width - margin.right, y2: height - margin.bottom, class: 'quadrant-axis' });
+
+    const medianX = x(medianEntropy);
+    const medianY = y(medianScore);
+    add('line', { x1: medianX, y1: margin.top, x2: medianX, y2: height - margin.bottom, class: 'quadrant-median' });
+    add('line', { x1: margin.left, y1: medianY, x2: width - margin.right, y2: medianY, class: 'quadrant-median' });
+    const labelStyle = 'quadrant-label';
+    add('text', { x: margin.left + plotWidth * 0.25, y: margin.top + 19, class: labelStyle, 'text-anchor': 'middle' }, '엔트로피 낮음 · 접근성 높음');
+    add('text', { x: margin.left + plotWidth * 0.75, y: margin.top + 19, class: labelStyle, 'text-anchor': 'middle' }, '엔트로피 높음 · 접근성 높음');
+    add('text', { x: margin.left + plotWidth * 0.25, y: height - margin.bottom - 12, class: labelStyle, 'text-anchor': 'middle' }, '엔트로피 낮음 · 접근성 낮음');
+    add('text', { x: margin.left + plotWidth * 0.75, y: height - margin.bottom - 12, class: labelStyle, 'text-anchor': 'middle' }, '엔트로피 높음 · 접근성 낮음');
+    add('text', { x: margin.left + plotWidth / 2, y: height - 24, class: 'quadrant-axis-label', 'text-anchor': 'middle' }, '용도혼합 엔트로피 지수 (h4_entropy_0to1)');
+    add('text', { x: 25, y: margin.top + plotHeight / 2, class: 'quadrant-axis-label', 'text-anchor': 'middle', transform: `rotate(-90 25 ${margin.top + plotHeight / 2})` }, '시설 접근 가중 점수 (로그 눈금)');
+
+    const palette = { high: '#168f83', mixed: '#3779c4', low: '#9064bd', lower: '#df8a45' };
+    const tooltip = document.createElement('div');
+    tooltip.className = 'quadrant-tooltip';
+    tooltip.hidden = true;
+    const showTooltip = (event, point) => {
+      tooltip.textContent = `${point.name} · 엔트로피 ${point.entropy.toFixed(3)} · 접근 점수 ${point.weightedScore.toLocaleString()}`;
+      tooltip.hidden = false;
+      const bounds = host.getBoundingClientRect();
+      tooltip.style.left = `${Math.min(bounds.width - 260, Math.max(8, event.clientX - bounds.left + 12))}px`;
+      tooltip.style.top = `${Math.max(4, event.clientY - bounds.top - 36)}px`;
+    };
+    for (const point of points) {
+      const isHighEntropy = point.entropy >= medianEntropy;
+      const isHighScore = point.weightedScore >= medianScore;
+      const dot = add('circle', {
+        cx: x(point.entropy), cy: y(point.weightedScore), r: 4.1,
+        fill: isHighScore ? (isHighEntropy ? palette.high : palette.mixed) : (isHighEntropy ? palette.lower : palette.low),
+        class: 'quadrant-point', tabindex: 0, role: 'button',
+        'aria-label': `${point.name}, 엔트로피 ${point.entropy.toFixed(3)}, 시설 접근 가중 점수 ${point.weightedScore.toLocaleString()}`
+      });
+      const titleNode = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      titleNode.textContent = `${point.name} · 엔트로피 ${point.entropy.toFixed(3)} · 점수 ${point.weightedScore.toLocaleString()}`;
+      dot.append(titleNode);
+      dot.addEventListener('pointerenter', event => showTooltip(event, point));
+      dot.addEventListener('pointermove', event => showTooltip(event, point));
+      dot.addEventListener('pointerleave', () => { tooltip.hidden = true; });
+      dot.addEventListener('focus', event => showTooltip(event, point));
+      dot.addEventListener('blur', () => { tooltip.hidden = true; });
+      dot.addEventListener('click', () => {
+        candidateList.hidden = true;
+        input.value = point.name;
+        selectIndustry(point);
+        document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      dot.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); dot.click(); }
+      });
+    }
+    host.append(svg, tooltip);
+    document.getElementById('quadrant-median-note').textContent = `점선은 중앙값 기준입니다 · 엔트로피 ${medianEntropy.toFixed(3)} · 가중 점수 ${medianScore.toLocaleString()}`;
+  }
+
   function askToChoose(candidates) {
     candidateList.replaceChildren();
     const prompt = document.createElement('p');
@@ -318,9 +441,11 @@
     fetch('industrial_boundaries.geojson').then(r => { if (!r.ok) throw new Error('산업단지 경계 데이터 로드 실패'); return r.json(); }),
     fetch('hospitals.json').then(r => { if (!r.ok) throw new Error('병·의원 자료 로드 실패'); return r.json(); }),
     fetch('emergency_facilities.json').then(r => { if (!r.ok) throw new Error('응급의료기관 자료 로드 실패'); return r.json(); }),
-    fetch('network_data.json').then(r => { if (!r.ok) throw new Error('OSM 도로망 거리 자료 로드 실패'); return r.json(); })
-  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network]) => {
+    fetch('network_data.json').then(r => { if (!r.ok) throw new Error('OSM 도로망 거리 자료 로드 실패'); return r.json(); }),
+    fetch('entropy_data.json').then(r => { if (!r.ok) throw new Error('용도혼합 엔트로피 자료 로드 실패'); return r.json(); })
+  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network, entropy]) => {
     networkData = network;
+    entropyData = entropy;
     industrialBoundaryById = new Map(industrialBoundaries.features.map(feature => [String(feature.properties.dan_id), feature]));
     document.getElementById('network-source').textContent = `거리 집계: 산업단지 경계를 100m 간격 다중 시작점으로 네트워크에 연결해 계산합니다. 경계 안 시설은 0m로 포함하며, 경계 없는 산업단지는 기존 좌표점 시작점을 사용합니다. OSM 기준일 ${networkData.retrieved || '미확인'}`;
     document.getElementById('network-source').textContent = `거리 집계 자료: OpenStreetMap 보행 가능 도로망 · 기준일 ${networkData.retrieved || '미확인'} · 위치를 최근접 도로 노드에 연결해 계산`;
@@ -389,6 +514,7 @@
       else map.removeLayer(noBoundaryMarkers);
     });
     renderRankings();
+    renderEntropyQuadrant();
     map.fitBounds(regionLayer.getBounds(), { padding: [18, 18] });
     setStatus(`산업단지 ${industries.length.toLocaleString()}곳이 지도에 표시돼 있습니다. 점을 클릭하거나 이름을 검색하세요.`);
   }).catch(error => setStatus(`지도 자료를 불러오지 못했습니다. ${error.message}`, true));
