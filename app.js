@@ -36,6 +36,10 @@
   let entropyData = { records: [], missingEntropyCount: 0 };
   let radiusFacilityData = { byIndustry: {} };
   let radiusFacilityScores = [];
+  let radiusQuadrantPoints = [];
+  let radiusQuadrantMedians = null;
+  let quadrantMap = null;
+  let quadrantIndustryLayer = null;
   let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
@@ -235,6 +239,8 @@
     };
     const medianEntropy = median(points.map(point => point.entropy));
     const medianScore = median(points.map(point => point.balancedFacilityScore));
+    radiusQuadrantPoints = points;
+    radiusQuadrantMedians = { entropy: medianEntropy, score: medianScore };
     const width = 1000;
     const height = 590;
     const margin = { top: 42, right: 28, bottom: 88, left: 98 };
@@ -317,6 +323,89 @@
     }
     host.append(svg, tooltip);
     medianNote.textContent = `점선은 중앙값 기준입니다 · 엔트로피 ${medianEntropy.toFixed(3)} · 가중점수 ${medianScore.toFixed(1)}`;
+  }
+
+  function quadrantKey(point) {
+    const highEntropy = point.entropy >= radiusQuadrantMedians.entropy;
+    const highScore = point.balancedFacilityScore >= radiusQuadrantMedians.score;
+    return highEntropy ? (highScore ? 'high-high' : 'high-low') : (highScore ? 'low-high' : 'low-low');
+  }
+
+  function renderQuadrantBoundaryMap(sigunguBoundaries, industrialBoundaries) {
+    const mapHost = document.getElementById('quadrant-map');
+    quadrantMap = L.map(mapHost, { zoomControl: true, scrollWheelZoom: true, preferCanvas: true, zoomSnap: 0.25 }).setView([36.3, 127.8], 7);
+    const districtPane = quadrantMap.createPane('quadrant-districts');
+    districtPane.style.zIndex = 350;
+    const selectedBoundaryPane = quadrantMap.createPane('quadrant-selected-industries');
+    selectedBoundaryPane.style.zIndex = 420;
+    const districtCanvas = L.canvas({ padding: 0.35, pane: 'quadrant-districts' });
+    const industryCanvas = L.canvas({ padding: 0.35, pane: 'quadrant-selected-industries' });
+    const districtLayer = L.geoJSON(sigunguBoundaries, {
+      pane: 'quadrant-districts',
+      renderer: districtCanvas,
+      interactive: true,
+      style: { color: '#9aa9bd', weight: 0.8, opacity: 0.9, fillColor: '#edf2f8', fillOpacity: 0.72, lineJoin: 'round' },
+      onEachFeature: (feature, layer) => layer.bindTooltip(feature.properties.name || feature.properties.name_eng || '', { sticky: true, direction: 'top' })
+    }).addTo(quadrantMap);
+    quadrantIndustryLayer = L.geoJSON(null, {
+      pane: 'quadrant-selected-industries',
+      renderer: industryCanvas,
+      interactive: true,
+      style: feature => ({ color: feature.properties.mapColor, weight: 1.5, opacity: 1, fillColor: feature.properties.mapColor, fillOpacity: 0.7, lineJoin: 'round' }),
+      onEachFeature: (feature, layer) => {
+        const point = feature.properties.quadrantPoint;
+        layer.bindTooltip(`${esc(point.name)} · 엔트로피 ${point.entropy.toFixed(3)} · 점수 ${point.balancedFacilityScore.toFixed(1)}`, { sticky: true, direction: 'top' });
+      }
+    }).addTo(quadrantMap);
+    const colors = { 'high-high': '#168f83', 'low-high': '#3779c4', 'high-low': '#df8a45', 'low-low': '#9064bd' };
+    const labels = {
+      'high-high': '엔트로피 높음 · 점수 높음',
+      'low-high': '엔트로피 낮음 · 점수 높음',
+      'high-low': '엔트로피 높음 · 점수 낮음',
+      'low-low': '엔트로피 낮음 · 점수 낮음'
+    };
+    const boundaryFeatures = industrialBoundaries.features;
+    const boundaryIds = new Set(boundaryFeatures.map(feature => String(feature.properties.dan_id)));
+    const boundaryPointById = new Map(radiusQuadrantPoints.filter(point => boundaryIds.has(String(point.id))).map(point => [String(point.id), point]));
+    const tabs = [...document.querySelectorAll('.quadrant-map-tab')];
+    const countNote = document.getElementById('quadrant-map-count');
+    function selectQuadrant(key) {
+      for (const tab of tabs) {
+        const active = tab.dataset.quadrant === key;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+      }
+      const selectedPoints = radiusQuadrantPoints.filter(point => quadrantKey(point) === key);
+      const selectedFeatures = boundaryFeatures.flatMap(feature => {
+        const point = boundaryPointById.get(String(feature.properties.dan_id));
+        if (!point || quadrantKey(point) !== key) return [];
+        return [{
+          ...feature,
+          properties: { ...feature.properties, mapColor: colors[key], quadrantPoint: point }
+        }];
+      });
+      quadrantIndustryLayer.clearLayers();
+      quadrantIndustryLayer.addData({ type: 'FeatureCollection', features: selectedFeatures });
+      const missingBoundaryCount = selectedPoints.length - selectedFeatures.length;
+      countNote.textContent = `${labels[key]} · 산업단지 ${selectedPoints.length.toLocaleString()}곳 · 경계 표시 ${selectedFeatures.length.toLocaleString()}곳${missingBoundaryCount ? ` · 경계 없음 ${missingBoundaryCount.toLocaleString()}곳` : ''}`;
+    }
+    for (const [index, tab] of tabs.entries()) {
+      tab.addEventListener('click', () => selectQuadrant(tab.dataset.quadrant));
+      tab.addEventListener('keydown', event => {
+        let nextIndex = index;
+        if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (index + tabs.length - 1) % tabs.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        tabs[nextIndex].focus();
+        selectQuadrant(tabs[nextIndex].dataset.quadrant);
+      });
+    }
+    selectQuadrant('high-high');
+    quadrantMap.fitBounds(districtLayer.getBounds(), { padding: [16, 16] });
+    quadrantMap.attributionControl.addAttribution('시군구 경계: <a href="https://github.com/southkorea/southkorea-maps">KOSTAT 2018 · southkorea-maps</a>');
   }
 
   function renderRankings() {
@@ -625,8 +714,9 @@
     fetch('emergency_facilities.json').then(r => { if (!r.ok) throw new Error('응급의료기관 자료 로드 실패'); return r.json(); }),
     fetch('network_data.json').then(r => { if (!r.ok) throw new Error('OSM 도로망 거리 자료 로드 실패'); return r.json(); }),
     fetch('entropy_data.json').then(r => { if (!r.ok) throw new Error('용도혼합 엔트로피 자료 로드 실패'); return r.json(); }),
-    fetch('radius_facility_counts.json').then(r => { if (!r.ok) throw new Error('직선거리 시설 집계 자료 로드 실패'); return r.json(); })
-  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network, entropy, radiusFacilities]) => {
+    fetch('radius_facility_counts.json').then(r => { if (!r.ok) throw new Error('직선거리 시설 집계 자료 로드 실패'); return r.json(); }),
+    fetch('sigungu_boundaries.geojson').then(r => { if (!r.ok) throw new Error('시군구 경계 데이터 로드 실패'); return r.json(); })
+  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network, entropy, radiusFacilities, sigunguBoundaries]) => {
     networkData = network;
     entropyData = entropy;
     radiusFacilityData = radiusFacilities;
@@ -701,6 +791,7 @@
     renderEntropyQuadrant();
     renderRadiusFacilityRankings();
     renderRadiusQuadrant();
+    renderQuadrantBoundaryMap(sigunguBoundaries, industrialBoundaries);
     map.fitBounds(regionLayer.getBounds(), { padding: [18, 18] });
     setStatus(`산업단지 ${industries.length.toLocaleString()}곳이 지도에 표시돼 있습니다. 점을 클릭하거나 이름을 검색하세요.`);
   }).catch(error => setStatus(`지도 자료를 불러오지 못했습니다. ${error.message}`, true));
@@ -818,6 +909,9 @@
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
       document.getElementById(tab.getAttribute('aria-controls')).hidden = !selected;
+    }
+    if (selectedTab.id === 'tab-page-2' && quadrantMap) {
+      requestAnimationFrame(() => quadrantMap.invalidateSize({ pan: false }));
     }
     if (moveFocus) selectedTab.focus();
   }
