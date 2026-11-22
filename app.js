@@ -241,7 +241,8 @@
     const plotWidth = width - margin.left - margin.right;
     const plotHeight = height - margin.top - margin.bottom;
     const x = value => margin.left + value * plotWidth;
-    const y = value => margin.top + (1 - value / 100) * plotHeight;
+    const scoreToLogScale = value => Math.log1p(Math.max(0, value)) / Math.log1p(100);
+    const y = value => margin.top + (1 - scoreToLogScale(value)) * plotHeight;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.setAttribute('role', 'img');
@@ -254,7 +255,7 @@
       return element;
     };
     add('title', {}, '4사분면: 엔트로피 지수와 시설 개수 균형 가중점수');
-    for (let tick = 0; tick <= 100; tick += 20) {
+    for (const tick of [0, 1, 2, 5, 10, 20, 50, 100]) {
       const py = y(tick);
       add('line', { x1: margin.left, y1: py, x2: width - margin.right, y2: py, class: 'quadrant-gridline' });
       add('text', { x: margin.left - 12, y: py + 4, class: 'quadrant-tick', 'text-anchor': 'end' }, String(tick));
@@ -276,7 +277,7 @@
     add('text', { x: margin.left + plotWidth * 0.25, y: height - margin.bottom - 12, class: 'quadrant-label', 'text-anchor': 'middle' }, '엔트로피 낮음 · 가중점수 낮음');
     add('text', { x: margin.left + plotWidth * 0.75, y: height - margin.bottom - 12, class: 'quadrant-label', 'text-anchor': 'middle' }, '엔트로피 높음 · 가중점수 낮음');
     add('text', { x: margin.left + plotWidth / 2, y: height - 24, class: 'quadrant-axis-label', 'text-anchor': 'middle' }, '엔트로피 지수 (h4_entropy_0to1)');
-    add('text', { x: 25, y: margin.top + plotHeight / 2, class: 'quadrant-axis-label', 'text-anchor': 'middle', transform: `rotate(-90 25 ${margin.top + plotHeight / 2})` }, '시설 개수 균형 가중점수 (0~100)');
+    add('text', { x: 25, y: margin.top + plotHeight / 2, class: 'quadrant-axis-label', 'text-anchor': 'middle', transform: `rotate(-90 25 ${margin.top + plotHeight / 2})` }, '시설 개수 균형 가중점수 (로그 축 · 원점수 0~100)');
     const tooltip = document.createElement('div');
     tooltip.className = 'quadrant-tooltip';
     tooltip.hidden = true;
@@ -292,7 +293,7 @@
       const highScore = point.balancedFacilityScore >= medianScore;
       const fill = highScore ? (highEntropy ? '#168f83' : '#3779c4') : (highEntropy ? '#df8a45' : '#9064bd');
       const dot = add('circle', {
-        cx: x(point.entropy), cy: y(point.balancedFacilityScore), r: 4.1, fill,
+        cx: x(point.entropy), cy: y(point.balancedFacilityScore), r: 3.1, fill,
         class: 'quadrant-point', tabindex: 0, role: 'button',
         'aria-label': `${point.name}, 엔트로피 ${point.entropy.toFixed(3)}, 가중점수 ${point.balancedFacilityScore.toFixed(1)}`
       });
