@@ -39,6 +39,7 @@
   let radiusQuadrantPoints = [];
   let radiusQuadrantMedians = null;
   let quadrantMap = null;
+  let quadrantMapBounds = null;
   let quadrantIndustryLayer = null;
   let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
@@ -404,7 +405,7 @@
       });
     }
     selectQuadrant('high-high');
-    quadrantMap.fitBounds(districtLayer.getBounds(), { padding: [16, 16] });
+    quadrantMapBounds = districtLayer.getBounds();
     quadrantMap.attributionControl.addAttribution('시군구 경계: <a href="https://github.com/southkorea/southkorea-maps">KOSTAT 2018 · southkorea-maps</a>');
   }
 
@@ -911,7 +912,12 @@
       document.getElementById(tab.getAttribute('aria-controls')).hidden = !selected;
     }
     if (selectedTab.id === 'tab-page-2' && quadrantMap) {
-      requestAnimationFrame(() => quadrantMap.invalidateSize({ pan: false }));
+      requestAnimationFrame(() => {
+        quadrantMap.invalidateSize({ pan: false });
+        if (quadrantMapBounds?.isValid()) {
+          quadrantMap.fitBounds(quadrantMapBounds, { padding: [20, 20], maxZoom: 7, animate: false });
+        }
+      });
     }
     if (moveFocus) selectedTab.focus();
   }
