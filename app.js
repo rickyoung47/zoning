@@ -41,6 +41,9 @@
   let quadrantMap = null;
   let quadrantMapBounds = null;
   let quadrantIndustryLayer = null;
+  let quadrantPointLayer = null;
+  let showQuadrantPoints = false;
+  let activeQuadrantKey = 'high-high';
   let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
@@ -54,6 +57,24 @@
     const dLon = (bLon - aLon) * rad;
     const v = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLon / 2) ** 2;
     return 6371008.8 * 2 * Math.atan2(Math.sqrt(v), Math.sqrt(1 - v));
+  };
+  const ringAreaMeters = coordinates => {
+    const radius = 6371008.8;
+    const radians = Math.PI / 180;
+    let sum = 0;
+    for (let index = 0; index < coordinates.length - 1; index++) {
+      const [lon1, lat1] = coordinates[index];
+      const [lon2, lat2] = coordinates[index + 1];
+      sum += (lon2 - lon1) * radians * (2 + Math.sin(lat1 * radians) + Math.sin(lat2 * radians));
+    }
+    return Math.abs(sum * radius * radius / 2);
+  };
+  const geometryAreaMeters = geometry => {
+    if (!geometry) return 0;
+    const polygonArea = rings => Math.max(0, ringAreaMeters(rings[0]) - rings.slice(1).reduce((sum, ring) => sum + ringAreaMeters(ring), 0));
+    if (geometry.type === 'Polygon') return polygonArea(geometry.coordinates);
+    if (geometry.type === 'MultiPolygon') return geometry.coordinates.reduce((sum, polygon) => sum + polygonArea(polygon), 0);
+    return 0;
   };
   const setStatus = (text, error = false) => {
     status.textContent = text;
@@ -347,8 +368,11 @@
     districtPane.style.zIndex = 350;
     const selectedBoundaryPane = quadrantMap.createPane('quadrant-selected-industries');
     selectedBoundaryPane.style.zIndex = 420;
+    const pointPane = quadrantMap.createPane('quadrant-industry-points');
+    pointPane.style.zIndex = 440;
     const districtCanvas = L.canvas({ padding: 0.35, pane: 'quadrant-districts' });
     const industryCanvas = L.canvas({ padding: 0.35, pane: 'quadrant-selected-industries' });
+    const pointCanvas = L.canvas({ padding: 0.45, pane: 'quadrant-industry-points' });
     const districtLayer = L.geoJSON(sigunguBoundaries, {
       pane: 'quadrant-districts',
       renderer: districtCanvas,
@@ -356,6 +380,7 @@
       style: { color: '#9aa9bd', weight: 0.8, opacity: 0.9, fillColor: '#edf2f8', fillOpacity: 0.72, lineJoin: 'round' },
       onEachFeature: (feature, layer) => layer.bindTooltip(feature.properties.name || feature.properties.name_eng || '', { sticky: true, direction: 'top' })
     }).addTo(quadrantMap);
+    quadrantPointLayer = L.layerGroup();
     quadrantIndustryLayer = L.geoJSON(null, {
       pane: 'quadrant-selected-industries',
       renderer: industryCanvas,
@@ -378,7 +403,9 @@
     const boundaryPointById = new Map(radiusQuadrantPoints.filter(point => boundaryIds.has(String(point.id))).map(point => [String(point.id), point]));
     const tabs = [...document.querySelectorAll('.quadrant-map-tab')];
     const countNote = document.getElementById('quadrant-map-count');
+    const averageAreaNote = document.getElementById('quadrant-map-average-area');
     function selectQuadrant(key) {
+      activeQuadrantKey = key;
       for (const tab of tabs) {
         const active = tab.dataset.quadrant === key;
         tab.setAttribute('aria-selected', String(active));
@@ -393,10 +420,40 @@
           properties: { ...feature.properties, mapColor: colors[key], quadrantPoint: point }
         }];
       });
+      const areaByIndustry = new Map();
+      for (const feature of selectedFeatures) {
+        const id = String(feature.properties.dan_id);
+        areaByIndustry.set(id, (areaByIndustry.get(id) || 0) + geometryAreaMeters(feature.geometry));
+      }
+      const areas = [...areaByIndustry.values()].filter(area => area > 0);
+      if (areas.length) {
+        const averageSquareMeters = areas.reduce((sum, area) => sum + area, 0) / areas.length;
+        const averageHectares = averageSquareMeters / 10000;
+        averageAreaNote.textContent = `선택 사분면 산업단지 평균 면적: ${averageHectares.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}ha (${(averageSquareMeters / 1000000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}km²) · 경계 자료 ${areas.length.toLocaleString()}곳 기준`;
+      } else {
+        averageAreaNote.textContent = '선택 사분면에서 면적을 계산할 산업단지 경계가 없습니다.';
+      }
       quadrantIndustryLayer.clearLayers();
-      quadrantIndustryLayer.addData({ type: 'FeatureCollection', features: selectedFeatures });
-      const missingBoundaryCount = selectedPoints.length - selectedFeatures.length;
-      countNote.textContent = `${labels[key]} · 산업단지 ${selectedPoints.length.toLocaleString()}곳 · 경계 표시 ${selectedFeatures.length.toLocaleString()}곳${missingBoundaryCount ? ` · 경계 없음 ${missingBoundaryCount.toLocaleString()}곳` : ''}`;
+      quadrantPointLayer.clearLayers();
+      if (showQuadrantPoints) {
+        quadrantMap.removeLayer(quadrantIndustryLayer);
+        quadrantPointLayer.addTo(quadrantMap);
+        const pointSites = selectedPoints.filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+        for (const point of pointSites) {
+          L.circleMarker([point.lat, point.lon], {
+            pane: 'quadrant-industry-points', renderer: pointCanvas, radius: 8,
+            color: '#ffffff', weight: 2, fillColor: colors[key], fillOpacity: 0.97,
+            bubblingMouseEvents: false
+          }).bindTooltip(`${esc(point.name)} · 엔트로피 ${point.entropy.toFixed(3)} · 점수 ${point.balancedFacilityScore.toFixed(1)}`, { sticky: true, direction: 'top' }).addTo(quadrantPointLayer);
+        }
+        countNote.textContent = `${labels[key]} · 산업단지 ${selectedPoints.length.toLocaleString()}곳 · 점 표시 ${pointSites.length.toLocaleString()}곳`;
+      } else {
+        quadrantMap.removeLayer(quadrantPointLayer);
+        quadrantIndustryLayer.addTo(quadrantMap);
+        quadrantIndustryLayer.addData({ type: 'FeatureCollection', features: selectedFeatures });
+        const missingBoundaryCount = selectedPoints.length - selectedFeatures.length;
+        countNote.textContent = `${labels[key]} · 산업단지 ${selectedPoints.length.toLocaleString()}곳 · 경계 표시 ${selectedFeatures.length.toLocaleString()}곳${missingBoundaryCount ? ` · 경계 없음 ${missingBoundaryCount.toLocaleString()}곳` : ''}`;
+      }
     }
     for (const [index, tab] of tabs.entries()) {
       tab.addEventListener('click', () => selectQuadrant(tab.dataset.quadrant));
@@ -412,6 +469,11 @@
         selectQuadrant(tabs[nextIndex].dataset.quadrant);
       });
     }
+    const pointToggle = document.getElementById('quadrant-point-toggle');
+    pointToggle.addEventListener('change', () => {
+      showQuadrantPoints = pointToggle.checked;
+      selectQuadrant(activeQuadrantKey);
+    });
     selectQuadrant('high-high');
     quadrantMapBounds = districtLayer.getBounds();
     quadrantMap.attributionControl.addAttribution('시군구 경계: <a href="https://github.com/southkorea/southkorea-maps">KOSTAT 2018 · southkorea-maps</a>');

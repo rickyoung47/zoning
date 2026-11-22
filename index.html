@@ -240,6 +240,11 @@
         </div>
         <p id="quadrant-map-count" aria-live="polite">분류별 산업단지 경계를 불러오는 중입니다.</p>
       </div>
+      <label class="quadrant-mode-toggle" for="quadrant-point-toggle">
+        <input id="quadrant-point-toggle" type="checkbox">
+        <span class="legend-switch" aria-hidden="true"></span>
+        <span>산업단지 경계를 점으로 표시</span>
+      </label>
       <div id="quadrant-map-tabs" class="quadrant-map-tabs" role="tablist" aria-label="지도에 표시할 4사분면 분류">
         <button class="quadrant-map-tab" type="button" role="tab" aria-selected="true" tabindex="0" data-quadrant="high-high"><i class="q-high-access"></i>엔트로피 높음 · 점수 높음</button>
         <button class="quadrant-map-tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-quadrant="low-high"><i class="q-low-mix"></i>엔트로피 낮음 · 점수 높음</button>
@@ -247,6 +252,7 @@
         <button class="quadrant-map-tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-quadrant="low-low"><i class="q-low-access-low-mix"></i>엔트로피 낮음 · 점수 낮음</button>
       </div>
       <div id="quadrant-map" class="quadrant-map" role="application" aria-label="시군구 경계와 선택한 4사분면 산업단지 경계 지도"></div>
+      <p id="quadrant-map-average-area" class="quadrant-average-area" aria-live="polite">사분면을 선택하면 산업단지 평균 면적을 표시합니다.</p>
       <p class="ranking-legend-note">점선 기준은 위 4사분면 그래프와 동일한 중앙값입니다. 지도에는 선택한 분류의 산업단지 경계만 표시하며, 경계 자료가 없는 산업단지는 제외됩니다. 시군구 경계 자료: 통계청 KOSTAT 2018.</p>
     </section>
     </div>
