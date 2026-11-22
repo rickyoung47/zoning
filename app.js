@@ -35,6 +35,7 @@
   let networkData = { byIndustry: {} };
   let entropyData = { records: [], missingEntropyCount: 0 };
   let radiusFacilityData = { byIndustry: {} };
+  let radiusFacilityScores = [];
   let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
@@ -180,6 +181,141 @@
         body.append(row);
       });
     }
+  }
+
+  function renderRadiusFacilityRankings() {
+    const facilityTypes = Object.keys(radiusFacilityData.radiusMeters || {});
+    const rawSites = industries.map(site => {
+      const counts = radiusFacilityData.byIndustry[String(site.id)];
+      if (!counts) return null;
+      const totalFacilities = facilityTypes.reduce((sum, key) => sum + (Number(counts[key]) || 0), 0);
+      return { ...site, facilityCounts: counts, totalFacilities };
+    }).filter(Boolean);
+    const maxima = facilityTypes.map(key => Math.max(0, ...rawSites.map(site => Number(site.facilityCounts[key]) || 0)));
+    const activeTypeIndexes = maxima.map((maximum, index) => maximum > 0 ? index : -1).filter(index => index >= 0);
+    radiusFacilityScores = rawSites.map(site => {
+      const normalizedSum = activeTypeIndexes.reduce((sum, index) => {
+        const key = facilityTypes[index];
+        return sum + (Number(site.facilityCounts[key]) || 0) / maxima[index];
+      }, 0);
+      return { ...site, balancedFacilityScore: activeTypeIndexes.length ? normalizedSum / activeTypeIndexes.length * 100 : 0 };
+    });
+    const byTotal = [...radiusFacilityScores].sort((a, b) =>
+      b.totalFacilities - a.totalFacilities || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
+    ).slice(0, 50);
+    const byBalancedScore = [...radiusFacilityScores].sort((a, b) =>
+      b.balancedFacilityScore - a.balancedFacilityScore || a.totalFacilities - b.totalFacilities || a.name.localeCompare(b.name, 'ko') || String(a.id).localeCompare(String(b.id))
+    ).slice(0, 50);
+    renderSiteRankRows('radius-rank-total', byTotal, 'totalFacilities', Math.max(1, ...byTotal.map(site => site.totalFacilities)), 'rank-track-radius-total', '개');
+    renderSiteRankRows('radius-rank-balanced', byBalancedScore, 'balancedFacilityScore', 100, 'rank-track-radius-balanced', '점');
+  }
+
+  function renderRadiusQuadrant() {
+    const siteById = new Map(industries.map(site => [String(site.id), site]));
+    const scoreById = new Map(radiusFacilityScores.map(site => [String(site.id), site.balancedFacilityScore]));
+    const points = entropyData.records.map(record => {
+      const site = siteById.get(String(record.id));
+      const score = scoreById.get(String(record.id));
+      if (!site || score === undefined || !Number.isFinite(record.entropy)) return null;
+      return { ...site, entropy: record.entropy, balancedFacilityScore: score };
+    }).filter(Boolean);
+    const host = document.getElementById('radius-quadrant-chart');
+    const medianNote = document.getElementById('radius-quadrant-median-note');
+    const missingNote = document.getElementById('radius-quadrant-missing-note');
+    missingNote.textContent = `엔트로피 결측 데이터 ${Number(entropyData.missingEntropyCount || 0).toLocaleString()}개는 그래프에서 제외했습니다.`;
+    host.replaceChildren();
+    if (!points.length) {
+      host.textContent = '그래프에 표시할 데이터가 없습니다.';
+      return;
+    }
+    const median = values => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    };
+    const medianEntropy = median(points.map(point => point.entropy));
+    const medianScore = median(points.map(point => point.balancedFacilityScore));
+    const width = 1000;
+    const height = 590;
+    const margin = { top: 42, right: 28, bottom: 88, left: 98 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const x = value => margin.left + value * plotWidth;
+    const y = value => margin.top + (1 - value / 100) * plotHeight;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `산업단지 ${points.length}곳의 엔트로피 지수와 시설 종류 균형 가중점수 4사분면`);
+    const add = (tag, attributes = {}, text = '') => {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+      if (text) element.textContent = text;
+      svg.append(element);
+      return element;
+    };
+    add('title', {}, '4사분면: 엔트로피 지수와 시설 개수 균형 가중점수');
+    for (let tick = 0; tick <= 100; tick += 20) {
+      const py = y(tick);
+      add('line', { x1: margin.left, y1: py, x2: width - margin.right, y2: py, class: 'quadrant-gridline' });
+      add('text', { x: margin.left - 12, y: py + 4, class: 'quadrant-tick', 'text-anchor': 'end' }, String(tick));
+    }
+    for (let tick = 0; tick <= 5; tick++) {
+      const value = tick / 5;
+      const px = x(value);
+      add('line', { x1: px, y1: margin.top, x2: px, y2: height - margin.bottom, class: 'quadrant-gridline' });
+      add('text', { x: px, y: height - margin.bottom + 23, class: 'quadrant-tick', 'text-anchor': 'middle' }, value.toFixed(1));
+    }
+    add('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: height - margin.bottom, class: 'quadrant-axis' });
+    add('line', { x1: margin.left, y1: height - margin.bottom, x2: width - margin.right, y2: height - margin.bottom, class: 'quadrant-axis' });
+    const medianX = x(medianEntropy);
+    const medianY = y(medianScore);
+    add('line', { x1: medianX, y1: margin.top, x2: medianX, y2: height - margin.bottom, class: 'quadrant-median' });
+    add('line', { x1: margin.left, y1: medianY, x2: width - margin.right, y2: medianY, class: 'quadrant-median' });
+    add('text', { x: margin.left + plotWidth * 0.25, y: margin.top + 19, class: 'quadrant-label', 'text-anchor': 'middle' }, '엔트로피 낮음 · 가중점수 높음');
+    add('text', { x: margin.left + plotWidth * 0.75, y: margin.top + 19, class: 'quadrant-label', 'text-anchor': 'middle' }, '엔트로피 높음 · 가중점수 높음');
+    add('text', { x: margin.left + plotWidth * 0.25, y: height - margin.bottom - 12, class: 'quadrant-label', 'text-anchor': 'middle' }, '엔트로피 낮음 · 가중점수 낮음');
+    add('text', { x: margin.left + plotWidth * 0.75, y: height - margin.bottom - 12, class: 'quadrant-label', 'text-anchor': 'middle' }, '엔트로피 높음 · 가중점수 낮음');
+    add('text', { x: margin.left + plotWidth / 2, y: height - 24, class: 'quadrant-axis-label', 'text-anchor': 'middle' }, '엔트로피 지수 (h4_entropy_0to1)');
+    add('text', { x: 25, y: margin.top + plotHeight / 2, class: 'quadrant-axis-label', 'text-anchor': 'middle', transform: `rotate(-90 25 ${margin.top + plotHeight / 2})` }, '시설 개수 균형 가중점수 (0~100)');
+    const tooltip = document.createElement('div');
+    tooltip.className = 'quadrant-tooltip';
+    tooltip.hidden = true;
+    const showTooltip = (event, point) => {
+      tooltip.textContent = `${point.name} · 엔트로피 ${point.entropy.toFixed(3)} · 가중점수 ${point.balancedFacilityScore.toFixed(1)}`;
+      tooltip.hidden = false;
+      const bounds = host.getBoundingClientRect();
+      tooltip.style.left = `${Math.min(bounds.width - 260, Math.max(8, event.clientX - bounds.left + 12))}px`;
+      tooltip.style.top = `${Math.max(4, event.clientY - bounds.top - 36)}px`;
+    };
+    for (const point of points) {
+      const highEntropy = point.entropy >= medianEntropy;
+      const highScore = point.balancedFacilityScore >= medianScore;
+      const fill = highScore ? (highEntropy ? '#168f83' : '#3779c4') : (highEntropy ? '#df8a45' : '#9064bd');
+      const dot = add('circle', {
+        cx: x(point.entropy), cy: y(point.balancedFacilityScore), r: 4.1, fill,
+        class: 'quadrant-point', tabindex: 0, role: 'button',
+        'aria-label': `${point.name}, 엔트로피 ${point.entropy.toFixed(3)}, 가중점수 ${point.balancedFacilityScore.toFixed(1)}`
+      });
+      const titleNode = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      titleNode.textContent = `${point.name} · 엔트로피 ${point.entropy.toFixed(3)} · 가중점수 ${point.balancedFacilityScore.toFixed(1)}`;
+      dot.append(titleNode);
+      dot.addEventListener('pointerenter', event => showTooltip(event, point));
+      dot.addEventListener('pointermove', event => showTooltip(event, point));
+      dot.addEventListener('pointerleave', () => { tooltip.hidden = true; });
+      dot.addEventListener('focus', event => showTooltip(event, point));
+      dot.addEventListener('blur', () => { tooltip.hidden = true; });
+      dot.addEventListener('click', () => {
+        candidateList.hidden = true;
+        input.value = point.name;
+        selectIndustry(point);
+        document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      dot.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); dot.click(); }
+      });
+    }
+    host.append(svg, tooltip);
+    medianNote.textContent = `점선은 중앙값 기준입니다 · 엔트로피 ${medianEntropy.toFixed(3)} · 가중점수 ${medianScore.toFixed(1)}`;
   }
 
   function renderRankings() {
@@ -562,6 +698,8 @@
     });
     renderRankings();
     renderEntropyQuadrant();
+    renderRadiusFacilityRankings();
+    renderRadiusQuadrant();
     map.fitBounds(regionLayer.getBounds(), { padding: [18, 18] });
     setStatus(`산업단지 ${industries.length.toLocaleString()}곳이 지도에 표시돼 있습니다. 점을 클릭하거나 이름을 검색하세요.`);
   }).catch(error => setStatus(`지도 자료를 불러오지 못했습니다. ${error.message}`, true));
@@ -670,6 +808,30 @@
       ? L.geoJSON(boundary).getBounds()
       : L.latLngBounds([site.lat, site.lon], [site.lat, site.lon]);
     map.fitBounds(focusBounds.pad(boundary ? 0.08 : 0.085), { maxZoom: 13, animate: true });
+  }
+
+  const pageTabs = [...document.querySelectorAll('.page-tab[role="tab"]')];
+  function activatePageTab(selectedTab, moveFocus = false) {
+    for (const tab of pageTabs) {
+      const selected = tab === selectedTab;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      document.getElementById(tab.getAttribute('aria-controls')).hidden = !selected;
+    }
+    if (moveFocus) selectedTab.focus();
+  }
+  for (const [index, tab] of pageTabs.entries()) {
+    tab.addEventListener('click', () => activatePageTab(tab));
+    tab.addEventListener('keydown', event => {
+      let nextIndex = index;
+      if (event.key === 'ArrowRight') nextIndex = (index + 1) % pageTabs.length;
+      else if (event.key === 'ArrowLeft') nextIndex = (index + pageTabs.length - 1) % pageTabs.length;
+      else if (event.key === 'Home') nextIndex = 0;
+      else if (event.key === 'End') nextIndex = pageTabs.length - 1;
+      else return;
+      event.preventDefault();
+      activatePageTab(pageTabs[nextIndex], true);
+    });
   }
 
   document.getElementById('search-button').addEventListener('click', chooseIndustry);
