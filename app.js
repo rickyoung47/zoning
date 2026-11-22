@@ -34,6 +34,7 @@
   let poiCoverage = new Set();
   let networkData = { byIndustry: {} };
   let entropyData = { records: [], missingEntropyCount: 0 };
+  let radiusFacilityData = { byIndustry: {} };
   let industrialBoundaryById = new Map();
   let schoolGrid = new Map();
   let highSchoolGrid = new Map();
@@ -136,6 +137,49 @@
       }
     }
     return counts;
+  }
+
+  function renderRadiusFacilityTable(site) {
+    const body = document.getElementById('radius-facility-count-rows');
+    const counts = radiusFacilityData.byIndustry[String(site.id)];
+    const groups = [
+      { label: '교육', items: [{ key: 'schools', label: '초·중·고등학교', radius: 2500 }, { key: 'universities', label: '대학교', radius: 11300 }] },
+      { label: '보육', items: [{ key: 'childcare', label: '어린이집', radius: 2500 }, { key: 'kindergarten', label: '유치원', radius: 2500 }] },
+      { label: '상업', items: [{ key: 'convenience', label: '편의점', radius: 2500 }, { key: 'large_mart', label: '대형마트', radius: 6300 }, { key: 'market', label: '시장', radius: 6300 }, { key: 'restaurant', label: '음식점', radius: 6300 }] },
+      { label: '의료', items: [{ key: 'hospital_clinic', label: '병·의원', radius: 6300 }, { key: 'emergency', label: '응급의료시설', radius: 6300 }, { key: 'general_hospital', label: '종합병원', radius: 11300 }] },
+      { label: '복지', items: [{ key: 'residential_welfare', label: '어린이·여성·노인·장애인 복지시설', radius: 2500 }] },
+      { label: '문화·체육', items: [
+        { key: 'library', label: '도서관', radius: 2500 }, { key: 'sports', label: '체육시설', radius: 2500 },
+        { key: 'cafe', label: '카페', radius: 2500 }, { key: 'movie_theater', label: '영화관', radius: 2500 },
+        { key: 'performance_exhibition', label: '공연·전시시설', radius: 6300 }, { key: 'youth_training', label: '청소년수련시설', radius: 6300 }
+      ] }
+    ];
+    body.replaceChildren();
+    for (const group of groups) {
+      group.items.forEach((item, index) => {
+        const row = document.createElement('tr');
+        if (index === 0) {
+          row.classList.add('group-start');
+          const groupCell = document.createElement('th');
+          groupCell.scope = 'rowgroup';
+          groupCell.rowSpan = group.items.length;
+          groupCell.textContent = group.label;
+          row.append(groupCell);
+        }
+        const nameCell = document.createElement('th');
+        nameCell.scope = 'row';
+        nameCell.textContent = item.label;
+        row.append(nameCell);
+        const radiusCell = document.createElement('td');
+        radiusCell.textContent = `${(item.radius / 1000).toFixed(1)}km`;
+        row.append(radiusCell);
+        const countCell = document.createElement('td');
+        const value = counts && Object.prototype.hasOwnProperty.call(counts, item.key) ? Number(counts[item.key]) : null;
+        countCell.textContent = value === null || !Number.isFinite(value) ? '-' : value.toLocaleString();
+        row.append(countCell);
+        body.append(row);
+      });
+    }
   }
 
   function renderRankings() {
@@ -443,10 +487,12 @@
     fetch('hospitals.json').then(r => { if (!r.ok) throw new Error('병·의원 자료 로드 실패'); return r.json(); }),
     fetch('emergency_facilities.json').then(r => { if (!r.ok) throw new Error('응급의료기관 자료 로드 실패'); return r.json(); }),
     fetch('network_data.json').then(r => { if (!r.ok) throw new Error('OSM 도로망 거리 자료 로드 실패'); return r.json(); }),
-    fetch('entropy_data.json').then(r => { if (!r.ok) throw new Error('용도혼합 엔트로피 자료 로드 실패'); return r.json(); })
-  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network, entropy]) => {
+    fetch('entropy_data.json').then(r => { if (!r.ok) throw new Error('용도혼합 엔트로피 자료 로드 실패'); return r.json(); }),
+    fetch('radius_facility_counts.json').then(r => { if (!r.ok) throw new Error('직선거리 시설 집계 자료 로드 실패'); return r.json(); })
+  ]).then(([data, boundaries, industrialBoundaries, hospitalData, emergencyData, network, entropy, radiusFacilities]) => {
     networkData = network;
     entropyData = entropy;
+    radiusFacilityData = radiusFacilities;
     industrialBoundaryById = new Map(industrialBoundaries.features.map(feature => [String(feature.properties.dan_id), feature]));
     document.getElementById('network-source').textContent = `거리 집계: 산업단지 경계를 100m 간격 다중 시작점으로 네트워크에 연결해 계산합니다. 경계 안 시설은 0m로 포함하며, 경계 없는 산업단지는 기존 좌표점 시작점을 사용합니다. OSM 기준일 ${networkData.retrieved || '미확인'}`;
     document.getElementById('network-source').textContent = `거리 집계 자료: OpenStreetMap 보행 가능 도로망 · 기준일 ${networkData.retrieved || '미확인'} · 위치를 최근접 도로 노드에 연결해 계산`;
@@ -592,6 +638,7 @@
         facilityRows.append(row);
       });
     }
+    renderRadiusFacilityTable(site);
     // Draw the widest OSM network catchment first so the closer boundaries remain visible.
     const contours = networkData.byIndustry[site.id]?.contours || [];
     for (const index of [...rings.keys()].reverse()) {
