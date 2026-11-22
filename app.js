@@ -332,6 +332,14 @@
     return highEntropy ? (highScore ? 'high-high' : 'high-low') : (highScore ? 'low-high' : 'low-low');
   }
 
+  function fitQuadrantMapToCountry() {
+    if (!quadrantMap || !quadrantMapBounds?.isValid()) return;
+    requestAnimationFrame(() => {
+      quadrantMap.invalidateSize({ pan: false });
+      quadrantMap.fitBounds(quadrantMapBounds, { padding: [20, 20], maxZoom: 7, animate: false });
+    });
+  }
+
   function renderQuadrantBoundaryMap(sigunguBoundaries, industrialBoundaries) {
     const mapHost = document.getElementById('quadrant-map');
     quadrantMap = L.map(mapHost, { zoomControl: true, scrollWheelZoom: true, preferCanvas: true, zoomSnap: 0.25 }).setView([36.3, 127.8], 7);
@@ -407,6 +415,7 @@
     selectQuadrant('high-high');
     quadrantMapBounds = districtLayer.getBounds();
     quadrantMap.attributionControl.addAttribution('시군구 경계: <a href="https://github.com/southkorea/southkorea-maps">KOSTAT 2018 · southkorea-maps</a>');
+    if (!document.getElementById('page-2-panel').hidden) fitQuadrantMapToCountry();
   }
 
   function renderRankings() {
@@ -912,12 +921,7 @@
       document.getElementById(tab.getAttribute('aria-controls')).hidden = !selected;
     }
     if (selectedTab.id === 'tab-page-2' && quadrantMap) {
-      requestAnimationFrame(() => {
-        quadrantMap.invalidateSize({ pan: false });
-        if (quadrantMapBounds?.isValid()) {
-          quadrantMap.fitBounds(quadrantMapBounds, { padding: [20, 20], maxZoom: 7, animate: false });
-        }
-      });
+      fitQuadrantMapToCountry();
     }
     if (moveFocus) selectedTab.focus();
   }
